@@ -1,0 +1,80 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>RatopiaUnitBrain</AssemblyName>
+    <Product>RatopiaUnitBrain</Product>
+    <Version>1.0.0</Version>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>..\Ratopia\BepInEx\plugins\RatopiaUnitBrain\</OutputPath>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <!-- Game and BepInEx References -->
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>..\Ratopia\Ratopia_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp-firstpass">
+      <HintPath>..\Ratopia\Ratopia_Data\Managed\Assembly-CSharp-firstpass.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>..\Ratopia\Ratopia_Data\Managed\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>..\Ratopia\Ratopia_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.Physics2DModule">
+      <HintPath>..\Ratopia\Ratopia_Data\Managed\UnityEngine.Physics2DModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>..\Ratopia\Ratopia_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>..\Ratopia\Ratopia_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>..\Ratopia\Ratopia_Data\Managed\Unity.TextMeshPro.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="spine-unity">
+      <HintPath>..\Ratopia\Ratopia_Data\Managed\spine-unity.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="spine-csharp">
+      <HintPath>..\Ratopia\Ratopia_Data\Managed\spine-csharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx">
+      <HintPath>..\Ratopia\BepInEx\core\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>..\Ratopia\BepInEx\core\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="CopyToSecondaryGameDirs" AfterTargets="Build">
+    <PropertyGroup>
+      <SecondaryPluginDir>..\Ratopia — копия\BepInEx\plugins\RatopiaUnitBrain\</SecondaryPluginDir>
+      <SandboxPluginDir>C:\Sandbox\xipwl\DefaultBox\drive\C\Games\ratopia\Ratopia\BepInEx\plugins\RatopiaUnitBrain\</SandboxPluginDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <BuiltPluginFiles Include="$(OutputPath)RatopiaUnitBrain.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(BuiltPluginFiles)" DestinationFolder="$(SecondaryPluginDir)" Condition="Exists('..\Ratopia — копия\BepInEx')" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="@(BuiltPluginFiles)" DestinationFolder="$(SandboxPluginDir)" Condition="Exists('C:\Sandbox\xipwl\DefaultBox\drive\C\Games\ratopia\Ratopia\BepInEx')" SkipUnchangedFiles="false" />
+  </Target>
+
+</Project>
