@@ -40,7 +40,9 @@ namespace RatopiaCoop.UI
 
         // Menu visibility (starts closed so Singleplayer Title Screen is unobstructed; top banner & F9 open it)
         private bool _showGUI = false;
+        private bool _showTopBanner = true;
         public bool IsMenuVisible => _showGUI;
+        public bool IsTopBannerVisible => _showTopBanner;
 
         // Window drag state
         private bool _isDragging = false;
@@ -131,6 +133,15 @@ namespace RatopiaCoop.UI
             _lastToggleTime = now;
             _showGUI = !_showGUI;
             Plugin.Print($"[CoopGUI] >>> MENU TOGGLED by [{triggerSource}] -> NOW {(_showGUI ? "VISIBLE (OPEN)" : "HIDDEN (CLOSED)")} <<<");
+        }
+
+        /// <summary>
+        /// Shows or hides the top floating hotkey banner so it never obscures top-left HUD resources.
+        /// </summary>
+        public void ToggleTopBanner(string triggerSource = "Manual")
+        {
+            _showTopBanner = !_showTopBanner;
+            Plugin.Print($"[CoopGUI] >>> TOP BANNER {(_showTopBanner ? "SHOWN" : "HIDDEN")} by [{triggerSource}] <<<");
         }
 
         private void Update()
@@ -376,22 +387,33 @@ namespace RatopiaCoop.UI
                 }
             }
 
-            // 1. Persistent Top Floating Header / Button Bar (ALWAYS VISIBLE)
-            float barWidth = Mathf.Min(Screen.width - 20, 560f);
-            Rect headerRect = new Rect(10, 8, barWidth, 34);
-
-            GUI.DrawTexture(headerRect, _solidTopBannerBg!);
-            DrawRectOutline(headerRect, 1, new Color(0f, 0.85f, 1f, 0.8f));
-
-            GUI.Label(new Rect(headerRect.x + 8, headerRect.y + 7, 360, 22),
-                "<b><color=#00e5ff>[RATOPIA CO-OP]</color></b> Hotkeys: <b>F10 | F11 | ~ | F9</b>", _whiteTextStyle);
-
-            // Clickable Toggle Button in header
-            Rect btnRect = new Rect(headerRect.x + barWidth - 170, headerRect.y + 4, 162, 26);
-            string btnText = _showGUI ? "<b><color=#ff6666>[ ❌ Close Menu ]</color></b>" : "<b><color=#55ff88>[ 🌐 Open Co-op Menu ]</color></b>";
-            if (GUI.Button(btnRect, btnText, _buttonStyle))
+            // 1. Persistent Top Floating Header / Button Bar (hideable via its [Hide] button or menu toggle)
+            if (_showTopBanner)
             {
-                ToggleMenu("Header Bar Button Click");
+                float barWidth = Mathf.Min(Screen.width - 20, 560f);
+                Rect headerRect = new Rect(10, 8, barWidth, 34);
+
+                GUI.DrawTexture(headerRect, _solidTopBannerBg!);
+                DrawRectOutline(headerRect, 1, new Color(0f, 0.85f, 1f, 0.8f));
+
+                float labelWidth = Mathf.Max(80f, barWidth - 252f);
+                GUI.Label(new Rect(headerRect.x + 8, headerRect.y + 7, labelWidth, 22),
+                    "<b><color=#00e5ff>[RATOPIA CO-OP]</color></b> Hotkeys: <b>F10 | F11 | ~ | F9</b>", _whiteTextStyle);
+
+                // Clickable Toggle Menu button in header
+                Rect btnRect = new Rect(headerRect.x + barWidth - 238, headerRect.y + 4, 162, 26);
+                string btnText = _showGUI ? "<b><color=#ff6666>[ ❌ Close Menu ]</color></b>" : "<b><color=#55ff88>[ 🌐 Open Co-op Menu ]</color></b>";
+                if (GUI.Button(btnRect, btnText, _buttonStyle))
+                {
+                    ToggleMenu("Header Bar Button Click");
+                }
+
+                // Clickable Hide Banner button inside the header so it stops blocking top-left HUD values
+                Rect hideRect = new Rect(headerRect.x + barWidth - 70, headerRect.y + 4, 62, 26);
+                if (GUI.Button(hideRect, "<b>Hide</b>", _redButtonStyle))
+                {
+                    ToggleTopBanner("Header Bar Hide Click");
+                }
             }
 
             if (!_showGUI) return;
@@ -417,8 +439,9 @@ namespace RatopiaCoop.UI
             }
 
             // Clamp window within viewport
+            float minWindowY = _showTopBanner ? 48f : 10f;
             _windowRect.x = Mathf.Clamp(_windowRect.x, 10, Mathf.Max(10, Screen.width - _windowRect.width - 10));
-            _windowRect.y = Mathf.Clamp(_windowRect.y, 48, Mathf.Max(48, Screen.height - _windowRect.height - 10));
+            _windowRect.y = Mathf.Clamp(_windowRect.y, minWindowY, Mathf.Max(minWindowY, Screen.height - _windowRect.height - 10));
 
             // 3. Draw Window Frame & Background Directly (Guaranteed solid, no window-layering occlusion)
             Rect borderRect = new Rect(_windowRect.x - 2, _windowRect.y - 2, _windowRect.width + 4, _windowRect.height + 4);
@@ -583,6 +606,13 @@ namespace RatopiaCoop.UI
             }
 
             GUILayout.Space(10);
+            string bannerBtnText = _showTopBanner ? "Hide Top Banner (Unblock HUD)" : "Show Top Banner";
+            if (GUILayout.Button(bannerBtnText, _buttonStyle, GUILayout.Height(26)))
+            {
+                ToggleTopBanner("Menu Toggle Button");
+            }
+
+            GUILayout.Space(4);
             if (GUILayout.Button("Close Menu [F10 / F11 / ~ / F9]", _buttonStyle, GUILayout.Height(26)))
             {
                 ToggleMenu("Bottom Close Button");
