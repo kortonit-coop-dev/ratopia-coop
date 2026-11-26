@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://kortonit-coop-dev.github.io/ratopia-coop/sitemap.xml
