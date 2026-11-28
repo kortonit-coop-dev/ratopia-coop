@@ -22,10 +22,10 @@
     "alternateName": ["Ratopia LAN Co-op Mod", "Ратопия мультиплеер мод", "RatopiaUnitBrain"],
     "applicationCategory": "GameApplication",
     "operatingSystem": "Windows",
-    "softwareVersion": "1.0.0",
+    "softwareVersion": "1.0.5",
     "license": "https://opensource.org/licenses/MIT",
     "url": "https://kortonit-coop-dev.github.io/ratopia-coop/",
-    "downloadUrl": "https://github.com/kortonit-coop-dev/ratopia-coop/releases/tag/v1.0.0",
+    "downloadUrl": "https://github.com/kortonit-coop-dev/ratopia-coop/releases/tag/v1.0.5",
     "codeRepository": "https://github.com/kortonit-coop-dev/ratopia-coop",
     "author": {
       "@type": "Person",
@@ -743,6 +743,7 @@
             <li><a href="#download" data-i18n="nav_download">Скачать</a></li>
             <li><a href="#features" data-i18n="nav_features">Возможности</a></li>
             <li><a href="#install" data-i18n="nav_install">Установка</a></li>
+            <li><a href="#changelog" data-i18n="nav_changelog">Changelog</a></li>
             <li><a href="#faq" data-i18n="nav_faq">FAQ</a></li>
             <li><a href="https://github.com/kortonit-coop-dev/ratopia-coop">GitHub</a></li>
           </ul>
@@ -762,7 +763,7 @@
       <div class="hero-panel">
         <div>
           <div class="pill-row">
-            <span class="pill pill-accent" data-i18n="pill_ver">Релиз v1.0.0</span>
+            <span class="pill pill-accent" data-i18n="pill_ver">Релиз v1.0.5</span>
             <span class="pill" data-i18n="pill_players">2 игрока · LAN / VPN</span>
             <span class="pill">BepInEx 5.4.23.2</span>
             <span class="pill">MIT License</span>
@@ -772,9 +773,9 @@
             Кооперативный мод для игры Ратопия (Ratopia), позволяющий играть вдвоём в реальном времени по локальной сети (LAN) или через интернет (Radmin VPN, Hamachi, Tailscale, прямой IP на UDP порту 7777).
           </p>
           <div class="actions">
-            <a class="btn btn-primary" href="https://github.com/kortonit-coop-dev/ratopia-coop/releases/download/v1.0.0/RatopiaCoop-Installer-v1.0.0.exe" data-i18n="hero_cta_exe">Скачать установщик (.exe)</a>
-            <a class="btn" href="https://github.com/kortonit-coop-dev/ratopia-coop/releases/download/v1.0.0/RatopiaCoop-Full-BepInEx-v1.0.0.zip" data-i18n="hero_cta_zip">Полный архив (.zip)</a>
-            <a class="btn" href="https://github.com/kortonit-coop-dev/ratopia-coop/releases/tag/v1.0.0" data-i18n="hero_cta_rel">Все файлы на GitHub</a>
+            <a class="btn btn-primary" href="https://github.com/kortonit-coop-dev/ratopia-coop/releases/download/v1.0.5/RatopiaCoop-Installer-v1.0.5.exe" data-i18n="hero_cta_exe">Скачать установщик (.exe)</a>
+            <a class="btn" href="https://github.com/kortonit-coop-dev/ratopia-coop/releases/download/v1.0.5/RatopiaCoop-Full-BepInEx-v1.0.5.zip" data-i18n="hero_cta_zip">Полный архив (.zip)</a>
+            <a class="btn" href="https://github.com/kortonit-coop-dev/ratopia-coop/releases/tag/v1.0.5" data-i18n="hero_cta_rel">Все файлы на GitHub</a>
           </div>
         </div>
 
@@ -811,7 +812,7 @@
     </section>
 
     <section id="download" aria-labelledby="download-title">
-      <h2 id="download-title" data-i18n="dl_title">Скачать Ratopia Co-op Mod v1.0.0</h2>
+      <h2 id="download-title" data-i18n="dl_title">Скачать Ratopia Co-op Mod v1.0.5</h2>
       <p class="section-intro" data-i18n="dl_intro">
         Выберите удобный вариант: автоматический установщик для Windows или один из 3 архивов. Все файлы собраны в Release-конфигурации и не содержат оригинальных файлов игры.
       </p>
@@ -827,60 +828,61 @@
             Самый простой способ для Windows: сам найдёт папку с игрой и установит BepInEx 5.4.23.2 вместе с обоими плагинами (RatopiaUnitBrain и RatopiaCoop).
           </p>
           <div class="card-actions">
-            <a class="btn btn-primary" href="https://github.com/kortonit-coop-dev/ratopia-coop/releases/download/v1.0.0/RatopiaCoop-Installer-v1.0.0.exe" data-i18n="dl_1_b">Скачать Installer .exe</a>
+            <a class="btn btn-primary" href="https://github.com/kortonit-coop-dev/ratopia-coop/releases/download/v1.0.5/RatopiaCoop-Installer-v1.0.5.exe" data-i18n="dl_1_b">Скачать Installer .exe</a>
           </div>
         </article>
 
         <article class="download-card">
           <div class="card-meta">
             <span class="card-badge" data-i18n="dl_badge_full">Готовый пакет</span>
-            <span class="file-size">824 KB · .ZIP</span>
+            <span class="file-size">848 KB · .ZIP</span>
           </div>
           <h3 data-i18n="dl_2_t">2. Полный архив с BepInEx</h3>
           <p class="card-body" data-i18n="dl_2_d">
-            Для чистой игры при ручной установке: загрузчик BepInEx 5.4.23.2 + UnityDoorstop 4.3.0, плагины RatopiaUnitBrain + RatopiaCoop и файлы лицензий MIT/CC0.
+            Для чистой игры при ручной установке: загрузчик BepInEx 5.4.23.2 + UnityDoorstop 4.3.0, плагины RatopiaUnitBrain + RatopiaCoop и файлы лицензий.
           </p>
           <div class="card-actions">
-            <a class="btn" href="https://github.com/kortonit-coop-dev/ratopia-coop/releases/download/v1.0.0/RatopiaCoop-Full-BepInEx-v1.0.0.zip" data-i18n="dl_2_b">Скачать Full-BepInEx .zip</a>
+            <a class="btn" href="https://github.com/kortonit-coop-dev/ratopia-coop/releases/download/v1.0.5/RatopiaCoop-Full-BepInEx-v1.0.5.zip" data-i18n="dl_2_b">Скачать Full-BepInEx .zip</a>
           </div>
         </article>
 
         <article class="download-card">
           <div class="card-meta">
             <span class="card-badge" data-i18n="dl_badge_upd">Обновление</span>
-            <span class="file-size">184 KB · .ZIP</span>
+            <span class="file-size">208 KB · .ZIP</span>
           </div>
           <h3 data-i18n="dl_3_t">3. Только оба плагина</h3>
           <p class="card-body" data-i18n="dl_3_d">
             Подойдёт, если BepInEx 5.4.x (x64) уже установлен в папке игры. Внутри только RatopiaCoop, LiteNetLib и RatopiaUnitBrain.
           </p>
           <div class="card-actions">
-            <a class="btn" href="https://github.com/kortonit-coop-dev/ratopia-coop/releases/download/v1.0.0/RatopiaCoop-Plugins-Only-v1.0.0.zip" data-i18n="dl_3_b">Скачать Plugins-Only .zip</a>
+            <a class="btn" href="https://github.com/kortonit-coop-dev/ratopia-coop/releases/download/v1.0.5/RatopiaCoop-Plugins-Only-v1.0.5.zip" data-i18n="dl_3_b">Скачать Plugins-Only .zip</a>
           </div>
         </article>
 
         <article class="download-card">
           <div class="card-meta">
             <span class="card-badge">API / Dev</span>
-            <span class="file-size">35.6 KB · .ZIP</span>
+            <span class="file-size">37.2 KB · .ZIP</span>
           </div>
           <h3 data-i18n="dl_4_t">4. Только RatopiaUnitBrain</h3>
           <p class="card-body" data-i18n="dl_4_d">
             Отдельная библиотека-модуль: единый реестр юнитов и животных, перехват маршрутов и задач на хосте и режим марионетки RemotePuppet.
           </p>
           <div class="card-actions">
-            <a class="btn" href="https://github.com/kortonit-coop-dev/ratopia-coop/releases/download/v1.0.0/RatopiaUnitBrain-Only-v1.0.0.zip" data-i18n="dl_4_b">Скачать UnitBrain .zip</a>
+            <a class="btn" href="https://github.com/kortonit-coop-dev/ratopia-coop/releases/download/v1.0.5/RatopiaUnitBrain-Only-v1.0.5.zip" data-i18n="dl_4_b">Скачать UnitBrain .zip</a>
           </div>
         </article>
       </div>
 
       <div class="checksum-box">
         <details>
-          <summary data-i18n="sha_summary">Контрольные суммы SHA-256 файлов релиза v1.0.0</summary>
-          <pre role="region" aria-label="Контрольные суммы SHA-256" data-i18n-aria="sha_aria" tabindex="0"><code>RatopiaCoop-Installer-v1.0.0.exe     DB58762A0E05096A57271B1AE1421B19CDB4F298B65A05DCE6FBA170D31FDBFD
-RatopiaCoop-Full-BepInEx-v1.0.0.zip  093D11CAC25542456F703736688AFBD047708498C280E51F68F9CC39891FF0DB
-RatopiaCoop-Plugins-Only-v1.0.0.zip  0BF433199639323E6FA57D3FCE2FD82759992361B46D4585CACAD5CB8AACCB06
-RatopiaUnitBrain-Only-v1.0.0.zip     4B978BE84A8BEC8226C0A9CBAFE632373FD98CEF8883FEADA8DFC130C8E6EDEB</code></pre>
+          <summary data-i18n="sha_summary">Контрольные суммы SHA-256 файлов релиза v1.0.5</summary>
+          <pre role="region" aria-label="Контрольные суммы SHA-256" data-i18n-aria="sha_aria" tabindex="0"><code>RatopiaCoop-Installer-v1.0.5.exe     A249F67C4FE68A218D8E3C2AEC8CF56B415A7E65311D4C4369CB7497B1363221
+RatopiaCoop-Full-BepInEx-v1.0.5.zip  6F165CB5AC8933FF780B91A25D51E831DEE3F11F5598804D6D7843911AF6ED13
+RatopiaCoop-Plugins-Only-v1.0.5.zip  4AF272DB412D7D9840557A2A20BB703ACE0CCA439DB96430FD6315A9D21F6F8F
+RatopiaCoop-Only-v1.0.5.zip          79F320C02FCFD4D0D4CF16664E5BF545ACE1D3DD8CD55D24BABA83A86A550BD8
+RatopiaUnitBrain-Only-v1.0.5.zip     361F59C50D31B68BDCEC6925537B58303B4EEA861EA6A4D0D2BF8F07A4A68CDC</code></pre>
         </details>
       </div>
     </section>
@@ -985,15 +987,34 @@ dotnet build coop/RatopiaCoop.csproj</code></pre>
       </div>
     </section>
 
+    <section id="changelog" aria-labelledby="changelog-title">
+      <h2 id="changelog-title" data-i18n="cl_title">История изменений (Changelog)</h2>
+      <details open>
+        <summary data-i18n="cl_105_t">v1.0.5 — Исправления загрузки, складов, стройки и реального времени</summary>
+        <ul>
+          <li data-i18n="cl_105_1">Исправлено подключение с первого раза из главного меню: клики по интерфейсу мода больше не проходят в кнопку «Продолжить», а сейв хоста жёстко фиксируется без перезаписи локальным автосейвом клиента.</li>
+          <li data-i18n="cl_105_2">Режим реального времени без заморозки: открытие меню стройки, приказов или MiningBox больше не ставит игру на паузу для напарника (скорости 0.125x–8x по-прежнему синхронизируются).</li>
+          <li data-i18n="cl_105_3">Хранилища и предметы на полу: убрано самопроизвольное открытие и сброс прокрутки StorageUI, исправлен забор ресурсов со складов, убраны фантомные предметы на земле и добавлена сверка рук (ClientHandSync).</li>
+          <li data-i18n="cl_105_4">Урон/трещины по блокам и шкалы работы: добавлена синхронизация HP и трещин тайлов, а шкала копки у юнитов-марионеток теперь крепится к блоку вместо зависания над головой.</li>
+          <li data-i18n="cl_105_5">Ручная стройка и чертежи: клиентская Королева может вручную строить здания и сажать растения с синхронизацией на хост; исправлены коллизии полуцелых координат чертежей.</li>
+          <li data-i18n="cl_105_6">Вход в город (CitizenCave / Almshouse) ограничен хостом ([Host Only]), а на верхнюю плашку CoopGUI добавлена кнопка Hide.</li>
+        </ul>
+      </details>
+      <details>
+        <summary data-i18n="cl_100_t">v1.0.0 — Первый публичный релиз</summary>
+        <ul>
+          <li data-i18n="cl_100_1">Две независимые Королевы (777 и 778), возрождение союзника, инвентарь, боёвка и анимации Spine 2D.</li>
+          <li data-i18n="cl_100_2">Модульная синхронизация ИИ на базе RatopiaUnitBrain (RemotePuppet интерполяция жителей, врагов, ботов, дронов и животных).</li>
+          <li data-i18n="cl_100_3">Синхронизация раскопок, MiningBox, чертежей, экономики, дерева исследований, времени суток, чата (Enter), LAN-поиска и передачи сейва хоста.</li>
+        </ul>
+      </details>
+    </section>
+
     <section id="faq" aria-labelledby="faq-title">
       <h2 id="faq-title" data-i18n="faq_title">Частые вопросы (FAQ)</h2>
       <details name="faq">
         <summary data-i18n="q1_t">Как играть через интернет, а не в одной домашней сети?</summary>
         <p data-i18n="q1_a">Создайте общую виртуальную локальную сеть в Radmin VPN, Hamachi, ZeroTier или Tailscale — либо откройте порт UDP 7777 на роутере хоста. Клиент вводит IP-адрес хоста из VPN в меню F9 и нажимает Connect.</p>
-      </details>
-      <details name="faq">
-        <summary data-i18n="q2_t">Законно и безопасно ли скачивать сборку с BepInEx?</summary>
-        <p data-i18n="q2_a">Да. В релизе нет никаких оригинальных файлов, библиотек или ассетов игры Ratopia. Включены только открытые компоненты BepInEx 5.4.23.2, HarmonyX, MonoMod, Mono.Cecil, LiteNetLib 2.1.4 (MIT), UnityDoorstop 4.3.0 (CC0) и открытый исходный код мода на GitHub.</p>
       </details>
       <details name="faq">
         <summary data-i18n="q3_t">Где находятся логи при ошибке или рассинхронизации?</summary>
@@ -1025,8 +1046,9 @@ dotnet build coop/RatopiaCoop.csproj</code></pre>
           nav_download: "Скачать",
           nav_features: "Возможности",
           nav_install: "Установка",
+          nav_changelog: "Changelog",
           nav_faq: "FAQ",
-          pill_ver: "Релиз v1.0.0",
+          pill_ver: "Релиз v1.0.5",
           pill_players: "2 игрока · LAN / VPN",
           hero_title: "Ратопия Кооп (Ratopia Co-op Mod) — мультиплеер на 2 игроков",
           hero_lead: "Кооперативный мод для игры Ратопия (Ratopia), позволяющий играть вдвоём в реальном времени по локальной сети (LAN) или через интернет (Radmin VPN, Hamachi, Tailscale, прямой IP на UDP порту 7777).",
@@ -1043,7 +1065,7 @@ dotnet build coop/RatopiaCoop.csproj</code></pre>
           spec_save_v: "Сейв хоста по сети (16 КБ)",
           spec_engine_k: "Движок игры",
           spec_keys_k: "Горячие клавиши",
-          dl_title: "Скачать Ratopia Co-op Mod v1.0.0",
+          dl_title: "Скачать Ratopia Co-op Mod v1.0.5",
           dl_intro: "Выберите удобный вариант: автоматический установщик для Windows или один из 3 архивов. Все файлы собраны в Release-конфигурации и не содержат оригинальных файлов игры.",
           dl_badge_rec: "Рекомендуется",
           dl_1_t: "1. Автоматический установщик",
@@ -1060,7 +1082,7 @@ dotnet build coop/RatopiaCoop.csproj</code></pre>
           dl_4_t: "4. Только RatopiaUnitBrain",
           dl_4_d: "Отдельная библиотека-модуль: единый реестр юнитов и животных, перехват маршрутов и задач на хосте и режим марионетки RemotePuppet.",
           dl_4_b: "Скачать UnitBrain .zip",
-          sha_summary: "Контрольные суммы SHA-256 файлов релиза v1.0.0",
+          sha_summary: "Контрольные суммы SHA-256 файлов релиза v1.0.5",
           sha_aria: "Контрольные суммы SHA-256",
           feat_title: "Что синхронизируется в кооперативе",
           feat_intro: "Хост выступает авторитетным сервером симуляции, а клиент подключается с отдельной Королевой, загружает текущий мир хоста и взаимодействует с колонией без рассинхрона.",
@@ -1078,7 +1100,7 @@ dotnet build coop/RatopiaCoop.csproj</code></pre>
           f6_d: "Поиск серверов в локальной сети (LAN Discovery), подключение по IP/VPN, чат с блокировкой горячих клавиш игры и потоковая передача сейва при входе.",
           inst_title: "Установка, управление и запуск по сети",
           inst_steps_t: "Пошаговый запуск",
-          inst_s1: "Скачайте RatopiaCoop-Installer-v1.0.0.exe и укажите папку игры, либо распакуйте RatopiaCoop-Full-BepInEx-v1.0.0.zip прямо в корень Ratopia/ (рядом с Ratopia.exe).",
+          inst_s1: "Скачайте RatopiaCoop-Installer-v1.0.5.exe и укажите папку игры, либо распакуйте RatopiaCoop-Full-BepInEx-v1.0.5.zip прямо в корень Ratopia/ (рядом с Ratopia.exe).",
           inst_s2: "Запустите игру у обоих игроков — при запуске откроется консоль BepInEx и статус мода.",
           inst_s3: "Хост: создайте новый мир или загрузите сохранение → нажмите F9 → выберите «Start Server (Host)».",
           inst_s4: "Клиент: находясь в главном меню, нажмите F9 → «Find LAN Servers» или введите IP хоста (локальный или из Radmin VPN / Hamachi) → «Connect».",
@@ -1091,11 +1113,21 @@ dotnet build coop/RatopiaCoop.csproj</code></pre>
           ctrl_r2: "Открыть чат / отправить сообщение (горячие клавиши игры блокируются при наборе)",
           ctrl_r3: "Возродить павшего союзника рядом (удерживать / взаимодействовать)",
           build_cap: "Сборка из исходников (.NET SDK 6.0+):",
+          cl_title: "История изменений (Changelog)",
+          cl_105_t: "v1.0.5 — Исправления загрузки, складов, стройки и реального времени",
+          cl_105_1: "Исправлено подключение с первого раза из главного меню: клики по интерфейсу мода больше не проходят в кнопку «Продолжить», а сейв хоста жёстко фиксируется без перезаписи локальным автосейвом клиента.",
+          cl_105_2: "Режим реального времени без заморозки: открытие меню стройки, приказов или MiningBox больше не ставит игру на паузу для напарника (скорости 0.125x–8x по-прежнему синхронизируются).",
+          cl_105_3: "Хранилища и предметы на полу: убрано самопроизвольное открытие и сброс прокрутки StorageUI, исправлен забор ресурсов со складов, убраны фантомные предметы на земле и добавлена сверка рук (ClientHandSync).",
+          cl_105_4: "Урон/трещины по блокам и шкалы работы: добавлена синхронизация HP и трещин тайлов, а шкала копки у юнитов-марионеток теперь крепится к блоку вместо зависания над головой.",
+          cl_105_5: "Ручная стройка и чертежи: клиентская Королева может вручную строить здания и сажать растения с синхронизацией на хост; исправлены коллизии полуцелых координат чертежей.",
+          cl_105_6: "Вход в город (CitizenCave / Almshouse) ограничен хостом ([Host Only]), а на верхнюю плашку CoopGUI добавлена кнопка Hide.",
+          cl_100_t: "v1.0.0 — Первый публичный релиз",
+          cl_100_1: "Две независимые Королевы (777 и 778), возрождение союзника, инвентарь, боёвка и анимации Spine 2D.",
+          cl_100_2: "Модульная синхронизация ИИ на базе RatopiaUnitBrain (RemotePuppet интерполяция жителей, врагов, ботов, дронов и животных).",
+          cl_100_3: "Синхронизация раскопок, MiningBox, чертежей, экономики, дерева исследований, времени суток, чата (Enter), LAN-поиска и передачи сейва хоста.",
           faq_title: "Частые вопросы (FAQ)",
           q1_t: "Как играть через интернет, а не в одной домашней сети?",
           q1_a: "Создайте общую виртуальную локальную сеть в Radmin VPN, Hamachi, ZeroTier или Tailscale — либо откройте порт UDP 7777 на роутере хоста. Клиент вводит IP-адрес хоста из VPN в меню F9 и нажимает Connect.",
-          q2_t: "Законно и безопасно ли скачивать сборку с BepInEx?",
-          q2_a: "Да. В релизе нет никаких оригинальных файлов, библиотек или ассетов игры Ratopia. Включены только открытые компоненты BepInEx 5.4.23.2, HarmonyX, MonoMod, Mono.Cecil, LiteNetLib 2.1.4 (MIT), UnityDoorstop 4.3.0 (CC0) и открытый исходный код мода на GitHub.",
           q3_t: "Где находятся логи при ошибке или рассинхронизации?",
           q3_a: "Основной журнал плагинов находится в файле Ratopia/BepInEx/LogOutput.log, а журнал движка Unity — в %LOCALAPPDATA%Low\\Cassel Games\\Ratopia\\Player.log. При обращении в GitHub Issues приложите логи обоих игроков.",
           footer_copy: "Ratopia Co-op Mod (Ратопия Кооп) · Лицензия MIT · Автор: kortonit · Неофициальный фанатский мод",
@@ -1112,8 +1144,9 @@ dotnet build coop/RatopiaCoop.csproj</code></pre>
           nav_download: "Download",
           nav_features: "Features",
           nav_install: "Install",
+          nav_changelog: "Changelog",
           nav_faq: "FAQ",
-          pill_ver: "Release v1.0.0",
+          pill_ver: "Release v1.0.5",
           pill_players: "2 Players · LAN / VPN",
           hero_title: "Ratopia Co-op Mod — Real-Time 2-Player Multiplayer",
           hero_lead: "Cooperative multiplayer mod for Ratopia (Cassel Games) enabling 2-player gameplay over LAN, virtual LAN tools (Radmin VPN, Hamachi, ZeroTier, Tailscale), or direct IP on UDP port 7777.",
@@ -1130,7 +1163,7 @@ dotnet build coop/RatopiaCoop.csproj</code></pre>
           spec_save_v: "Live Save Stream (16 KB)",
           spec_engine_k: "Game Runtime",
           spec_keys_k: "Hotkeys",
-          dl_title: "Download Ratopia Co-op Mod v1.0.0",
+          dl_title: "Download Ratopia Co-op Mod v1.0.5",
           dl_intro: "Pick the Windows guided installer or one of three manual zip packages. All binaries are built in Release mode and contain zero copyrighted Ratopia game files.",
           dl_badge_rec: "Recommended",
           dl_1_t: "1. Windows Auto-Installer",
@@ -1147,7 +1180,7 @@ dotnet build coop/RatopiaCoop.csproj</code></pre>
           dl_4_t: "4. RatopiaUnitBrain Only",
           dl_4_d: "Standalone AI & entity replication library for modders: O(1) unit registry, host path/task sensors, and smooth client RemotePuppet execution.",
           dl_4_b: "Download UnitBrain .zip",
-          sha_summary: "SHA-256 Checksums for v1.0.0 Release Files",
+          sha_summary: "SHA-256 Checksums for v1.0.5 Release Files",
           sha_aria: "SHA-256 checksums",
           feat_title: "Synchronized Gameplay Systems",
           feat_intro: "The host runs authoritative world simulation while the client spawns as a second Queen, streams the live colony save on join, and plays together in real time.",
@@ -1165,7 +1198,7 @@ dotnet build coop/RatopiaCoop.csproj</code></pre>
           f6_d: "Automatic LAN server broadcast discovery, direct IP/VPN connect, chat window with gameplay hotkey suppression, and chunked save transfer on connect.",
           inst_title: "Installation, Controls & Quickstart",
           inst_steps_t: "How to Host & Join",
-          inst_s1: "Run RatopiaCoop-Installer-v1.0.0.exe (or extract RatopiaCoop-Full-BepInEx-v1.0.0.zip directly into your Ratopia/ folder next to Ratopia.exe).",
+          inst_s1: "Run RatopiaCoop-Installer-v1.0.5.exe (or extract RatopiaCoop-Full-BepInEx-v1.0.5.zip directly into your Ratopia/ folder next to Ratopia.exe).",
           inst_s2: "Launch Ratopia on both PCs — the BepInEx console and co-op status overlay confirm the mod loaded.",
           inst_s3: "Host: Create or load any save in-game → press F9 → click 'Start Server (Host)'.",
           inst_s4: "Client: From the main menu press F9 → click 'Find LAN Servers' or enter the host's LAN/VPN IP address → click 'Connect'.",
@@ -1178,11 +1211,21 @@ dotnet build coop/RatopiaCoop.csproj</code></pre>
           ctrl_r2: "Open chat / send message (suppresses game hotkeys while typing)",
           ctrl_r3: "Revive a downed partner when standing nearby",
           build_cap: "Build from source (.NET SDK 6.0+):",
+          cl_title: "Changelog",
+          cl_105_t: "v1.0.5 — Load race, storage/item sync, tile HP, manual build & real-time order fixes",
+          cl_105_1: "Fixed first-time connection from the main menu: mod UI clicks no longer pass through to TitleUI Continue, and the Host save is pinned without being overwritten by local Client autosaves.",
+          cl_105_2: "Real-time build & mining menus: opening Build/Order/MiningBox UI no longer pauses the world or freezes your co-op partner (0.125x–8x speeds remain synced).",
+          cl_105_3: "Storage UI & ground items: prevented StorageUI from reopening after close or resetting scroll/tabs, fixed warehouse withdrawals, removed phantom pickups, and added ClientHandSync.",
+          cl_105_4: "Tile mining cracks & puppet gauges: added live tile HP/crack sync (TileHpUpdate) and attached unit WorkTimeGauge bars to the target block instead of floating over units.",
+          cl_105_5: "Client manual construction & blueprint precision: Client Queen can manually build and plant blueprints with Host sync, using sub-tile float matching instead of rounded coordinates.",
+          cl_105_6: "Restricted City Entrance / Almshouse recruitment to Host ([Host Only]) and added a [Hide] button to the CoopGUI top banner.",
+          cl_100_t: "v1.0.0 — Initial Public Release",
+          cl_100_1: "Two independent Queens (777 & 778), ally revive, separate inventories, combat, and Spine 2D animations.",
+          cl_100_2: "RatopiaUnitBrain AI replication (RemotePuppet interpolation for citizens, guards, bots, drones, enemies, and wildlife).",
+          cl_100_3: "Synchronized digging, MiningBox orders, blueprints, economy, research tree, world clock, chat (Enter), LAN discovery, and live save streaming.",
           faq_title: "Frequently Asked Questions",
           q1_t: "How do we play online over the internet?",
           q1_a: "Use any virtual LAN app such as Radmin VPN, Hamachi, ZeroTier, or Tailscale — or forward UDP port 7777 on the host router. Then enter the host's IP in the F9 menu and click Connect.",
-          q2_t: "Is the BepInEx bundle safe and legal?",
-          q2_a: "Yes. No original Ratopia game assets or binaries are included anywhere in the releases. Only open-source components are bundled: BepInEx 5.4.23.2, HarmonyX, MonoMod, Mono.Cecil, LiteNetLib 2.1.4 (MIT), UnityDoorstop 4.3.0 (CC0), and our MIT-licensed mod source.",
           q3_t: "Where can I find log files if something goes wrong?",
           q3_a: "Mod and BepInEx logs are written to Ratopia/BepInEx/LogOutput.log, and Unity engine logs are in %LOCALAPPDATA%Low\\Cassel Games\\Ratopia\\Player.log. Please attach both Host and Client logs when opening a GitHub issue.",
           footer_copy: "Ratopia Co-op Mod · MIT License · Created by kortonit · Unofficial community mod",
@@ -1199,8 +1242,9 @@ dotnet build coop/RatopiaCoop.csproj</code></pre>
           nav_download: "下载",
           nav_features: "功能特性",
           nav_install: "安装教程",
+          nav_changelog: "更新日志",
           nav_faq: "常见问题",
-          pill_ver: "版本 v1.0.0",
+          pill_ver: "版本 v1.0.5",
           pill_players: "双人合作 · 局域网 / VPN",
           hero_title: "Ratopia 鼠托邦双人联机模组 (Co-op Mod)",
           hero_lead: "专为生存城市建造游戏《鼠托邦 (Ratopia)》打造的双人实时合作联机模组。支持局域网 (LAN)、虚拟局域网 (Radmin VPN / Hamachi / ZeroTier / Tailscale) 或公网直连（UDP 端口 7777）。",
@@ -1217,7 +1261,7 @@ dotnet build coop/RatopiaCoop.csproj</code></pre>
           spec_save_v: "入房自动传输存档 (16 KB)",
           spec_engine_k: "游戏引擎",
           spec_keys_k: "快捷键",
-          dl_title: "下载 Ratopia Co-op Mod v1.0.0",
+          dl_title: "下载 Ratopia Co-op Mod v1.0.5",
           dl_intro: "可选择 Windows 自动安装器或三种手动压缩包。所有版本均以 Release 模式编译，不含任何《鼠托邦》原版游戏文件。",
           dl_badge_rec: "推荐使用",
           dl_1_t: "1. Windows 自动安装器",
@@ -1234,7 +1278,7 @@ dotnet build coop/RatopiaCoop.csproj</code></pre>
           dl_4_t: "4. 仅 RatopiaUnitBrain",
           dl_4_d: "独立的 AI 与实体同步核心库：O(1) 单位注册表、主机路径/任务传感器，以及客户端 RemotePuppet 平滑插值控制。",
           dl_4_b: "下载 UnitBrain .zip",
-          sha_summary: "v1.0.0 发布文件 SHA-256 校验值",
+          sha_summary: "v1.0.5 发布文件 SHA-256 校验值",
           sha_aria: "SHA-256 校验值",
           feat_title: "多人合作同步内容",
           feat_intro: "主机负责世界模拟与 AI 演算，客户端以第二位女王身份加入并自动接收主机实时存档，实现低延迟稳定联机。",
@@ -1252,7 +1296,7 @@ dotnet build coop/RatopiaCoop.csproj</code></pre>
           f6_d: "支持局域网自动扫描房间 (LAN Discovery)、IP/VPN 直连、防快捷键误触的游戏内聊天框以及进房自动流式传输主机存档。",
           inst_title: "安装、按键与联机步骤",
           inst_steps_t: "快速联机步骤",
-          inst_s1: "运行 RatopiaCoop-Installer-v1.0.0.exe 选择游戏目录，或将 RatopiaCoop-Full-BepInEx-v1.0.0.zip 直接解压到 Ratopia/ 根目录（Ratopia.exe 同级）。",
+          inst_s1: "运行 RatopiaCoop-Installer-v1.0.5.exe 选择游戏目录，或将 RatopiaCoop-Full-BepInEx-v1.0.5.zip 直接解压到 Ratopia/ 根目录（Ratopia.exe 同级）。",
           inst_s2: "双方启动游戏——若看到 BepInEx 控制台和模组状态提示，说明加载成功。",
           inst_s3: "主机：创建新世界或读取存档 → 按 F9 → 点击 «Start Server (Host)» 开启房间。",
           inst_s4: "客户端：在主菜单按 F9 → 点击 «Find LAN Servers» 搜索房间，或输入主机 IP（局域网或 Radmin VPN / Hamachi 地址）→ 点击 «Connect»。",
@@ -1265,11 +1309,21 @@ dotnet build coop/RatopiaCoop.csproj</code></pre>
           ctrl_r2: "打开聊天框 / 发送消息（打字时自动屏蔽游戏快捷键）",
           ctrl_r3: "靠近倒地队友时救援复活",
           build_cap: "从源码编译（需要 .NET SDK 6.0+）：",
+          cl_title: "更新日志 (Changelog)",
+          cl_105_t: "v1.0.5 — 修复首次进房串档、仓库/物品同步、方块裂纹、手动建造与实时指令",
+          cl_105_1: "修复主菜单首次连接：联机界面点击不再穿透到 TitleUI 的“继续”按钮，并锁定主机存档防止被客户端本地自动存档覆盖。",
+          cl_105_2: "实时建造与指令菜单：打开建造、指令轮盘或 MiningBox 框选时不再全局暂停并冻结队友（0.125x–8x 倍速仍同步）。",
+          cl_105_3: "修复仓库界面与地面物品同步：解决关闭 StorageUI 后自动重开及滚动/标签重置问题，修复取物逻辑、移除幽灵拾取并新增手部校验 (ClientHandSync)。",
+          cl_105_4: "新增方块耐久与裂纹实时同步 (TileHpUpdate)，并将傀儡单位的工作进度条正确挂载到目标方块而非悬浮在头顶。",
+          cl_105_5: "支持客户端女王手动建造蓝图与种植蓝图并同步至主机，使用亚格精度匹配替代取整坐标碰撞。",
+          cl_105_6: "将城市入口 / 救济院招募鼠民限制为主机操作 ([Host Only])，并在顶部悬浮条新增 Hide 隐藏按钮。",
+          cl_100_t: "v1.0.0 — 首个公开版本",
+          cl_100_1: "双独立女王系统 (777 & 778)、队友救援复活、独立背包、战斗与 Spine 2D 动画同步。",
+          cl_100_2: "基于 RatopiaUnitBrain 的实体与 AI 同步（居民、守卫、无人机、机器人、敌人与动物平滑傀儡插值）。",
+          cl_100_3: "同步挖掘、MiningBox 指令、蓝图建筑、经济、科研树、世界时间、游戏内聊天 (Enter)、局域网发现与存档流式传输。",
           faq_title: "常见问题 (FAQ)",
           q1_t: "如何与异地好友通过互联网联机？",
           q1_a: "推荐使用 Radmin VPN、Hamachi、ZeroTier 或 Tailscale 组建虚拟局域网，或在主机路由器转发 UDP 7777 端口。随后客户端在 F9 菜单填入主机的虚拟 IP 并点击 Connect 即可。",
-          q2_t: "整合包内的 BepInEx 安全合法吗？",
-          q2_a: "安全合规。发布包中不含任何《鼠托邦》原版游戏资源或代码，仅打包了开源的 BepInEx 5.4.23.2、HarmonyX、MonoMod、Mono.Cecil、LiteNetLib 2.1.4 (MIT)、UnityDoorstop 4.3.0 (CC0) 及本模组开源代码。",
           q3_t: "遇到报错或不同步时在哪里查看日志？",
           q3_a: "模组主日志位于 Ratopia/BepInEx/LogOutput.log，Unity 引擎日志位于 %LOCALAPPDATA%Low\\Cassel Games\\Ratopia\\Player.log。提交 GitHub Issue 时请附上主机与客户端双方日志。",
           footer_copy: "Ratopia Co-op Mod · MIT 开源协议 · 作者：kortonit · 非官方玩家社区模组",
