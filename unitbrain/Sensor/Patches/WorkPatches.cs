@@ -50,10 +50,9 @@ namespace RatopiaUnitBrain.Sensor.Patches
             if (UnitRegistry.Instance.GetControlMode(unit) != BrainControlMode.Autonomous)
                 return;
 
-            float duration = tile != null && tile.m_HP > 0 ? tile.m_HP : 3.5f;
+            float hpRatio = (tile != null && tile.m_MaxHP > 0f) ? Mathf.Clamp01(tile.m_HP / tile.m_MaxHP) : 1f;
             Vector2 targetPos = tile != null ? tile.GetPos() : (unit.Tf != null ? (Vector2)unit.Tf.position : Vector2.zero);
-            BrainSensor.Instance.RaiseWorkGaugeUpdated(unit, true, 0f, duration);
-            BrainSensor.Instance.RaiseTaskStarted(unit, new TaskDescriptor(UnitTaskType.Mining, targetPos, 0, "MiningTile", duration));
+            BrainSensor.Instance.RaiseTaskStarted(unit, new TaskDescriptor(UnitTaskType.Mining, targetPos, 0, "MiningTile", 0f, TileType.None, isTileTarget: tile != null, initialProgress: hpRatio));
         }
 
         [HarmonyPatch(typeof(WorkTimeGauge), nameof(WorkTimeGauge.GaugeActive), new Type[] { typeof(WorldObject), typeof(EffectActive) })]
@@ -65,9 +64,10 @@ namespace RatopiaUnitBrain.Sensor.Patches
             if (UnitRegistry.Instance.GetControlMode(unit) != BrainControlMode.Autonomous)
                 return;
 
+            float hpRatio = (w_obj != null && w_obj.m_MaxHP > 0f) ? Mathf.Clamp01(w_obj.m_HP / w_obj.m_MaxHP) : 1f;
             Vector2 targetPos = w_obj != null ? (Vector2)w_obj.transform.position : (unit.Tf != null ? (Vector2)unit.Tf.position : Vector2.zero);
-            BrainSensor.Instance.RaiseWorkGaugeUpdated(unit, true, 0f, 4f);
-            BrainSensor.Instance.RaiseTaskStarted(unit, new TaskDescriptor(UnitTaskType.Gathering, targetPos, 0, "GatheringWorldObj", 4f));
+            BrainSensor.Instance.RaiseWorkGaugeUpdated(unit, true, hpRatio, 0f);
+            BrainSensor.Instance.RaiseTaskStarted(unit, new TaskDescriptor(UnitTaskType.Gathering, targetPos, 0, "GatheringWorldObj", 0f, TileType.None, isTileTarget: false, initialProgress: hpRatio));
         }
 
         [HarmonyPatch(typeof(WorkTimeGauge), nameof(WorkTimeGauge.GaugeActive_RT), new Type[] { typeof(WorldObject), typeof(EffectActive), typeof(float) })]

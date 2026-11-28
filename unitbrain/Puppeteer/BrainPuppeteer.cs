@@ -44,6 +44,14 @@ namespace RatopiaUnitBrain.Puppeteer
 
         public void ClearAllPuppetStates()
         {
+            foreach (var handle in _gaugeCoroutines.Values)
+            {
+                if (Timing.IsRunning(handle))
+                {
+                    Timing.KillCoroutines(handle);
+                }
+            }
+            _gaugeCoroutines.Clear();
             _puppetStates.Clear();
             _animalStates.Clear();
         }
@@ -292,13 +300,20 @@ namespace RatopiaUnitBrain.Puppeteer
                 }
 
                 // Work gauge
-                if (cmd.ShowWorkGauge && cmd.WorkGaugeDuration > 0f)
+                if (cmd.ShowWorkGauge)
                 {
-                    StartPuppetWorkGauge(unit, cmd.WorkGaugeDuration);
+                    if (cmd.IsTileTarget || cmd.WorkGaugeDuration <= 0f)
+                    {
+                        SetPuppetWorkGaugeProgress(unit, cmd.WorkProgress > 0f ? cmd.WorkProgress : 1f, cmd.IsTileTarget, cmd.WorkTargetPos);
+                    }
+                    else
+                    {
+                        StartPuppetWorkGauge(unit, cmd.WorkGaugeDuration, cmd.IsTileTarget, cmd.WorkTargetPos);
+                    }
                 }
-                else if (!cmd.ShowWorkGauge && unit.m_WorkTimeGauge != null && unit.m_WorkTimeGauge.IsGaugeAcitve())
+                else
                 {
-                    unit.m_WorkTimeGauge.StopGauge(TypeOrder.Other);
+                    StopPuppetWorkGauge(unit);
                 }
 
                 // Carried item visual
@@ -407,6 +422,7 @@ namespace RatopiaUnitBrain.Puppeteer
 
                 if (snapshot.CharState == CharState.Death && unit.m_CharState != CharState.Death)
                 {
+                    StopPuppetWorkGauge(unit);
                     unit.DeathCheck(0);
                     return;
                 }
@@ -452,13 +468,13 @@ namespace RatopiaUnitBrain.Puppeteer
                 ApplyCarriedItemVisual(unit, snapshot.CarriedItem, snapshot.CarriedCount);
 
                 // Work gauge progress
-                if (snapshot.IsWorking)
+                if (snapshot.IsWorking && snapshot.CharState != CharState.Death)
                 {
-                    SetPuppetWorkGaugeProgress(unit, snapshot.WorkProgress);
+                    SetPuppetWorkGaugeProgress(unit, snapshot.WorkProgress, snapshot.IsTileTarget, snapshot.WorkTargetPos);
                 }
-                else if (unit.m_WorkTimeGauge != null && unit.m_WorkTimeGauge.IsGaugeAcitve() && !_gaugeCoroutines.ContainsKey(unit))
+                else
                 {
-                    unit.m_WorkTimeGauge.StopGauge(TypeOrder.Other);
+                    StopPuppetWorkGauge(unit);
                 }
             }
             catch (Exception ex)
@@ -766,7 +782,7 @@ namespace RatopiaUnitBrain.Puppeteer
             catch { }
         }
 
-        public void StartPuppetWorkGauge(GameUnit unit, float duration)
+        public void StartPuppetWorkGauge(GameUnit unit, float duration, bool isTileTarget = false, Vector2 workTargetPos = default)
         {
             if (unit == null || unit.m_WorkTimeGauge == null) return;
             try
@@ -775,6 +791,16 @@ namespace RatopiaUnitBrain.Puppeteer
                 {
                     Timing.KillCoroutines(existing);
                 }
+                _gaugeCoroutines.Remove(unit);
+
+                if (isTileTarget || duration <= 0f)
+                {
+                    SetPuppetWorkGaugeProgress(unit, 1f, isTileTarget, workTargetPos);
+                    return;
+                }
+
+                if (!PositionPuppetWorkGauge(unit, unit.m_WorkTimeGauge, false, Vector2.zero))
+                    return;
 
                 var handle = Timing.RunCoroutine(PuppetGaugeCoroutine(unit, duration));
                 _gaugeCoroutines[unit] = handle;
@@ -782,19 +808,97 @@ namespace RatopiaUnitBrain.Puppeteer
             catch { }
         }
 
-        public void SetPuppetWorkGaugeProgress(GameUnit unit, float normalizedWidth)
+        public void StopPuppetWorkGauge(GameUnit unit)
+        {
+            if (unit == null) return;
+            try
+            {
+                if (_gaugeCoroutines.TryGetValue(unit, out var handle))
+                {
+                    if (Timing.IsRunning(handle))
+                    {
+                        Timing.KillCoroutines(handle);
+                    }
+                    _gaugeCoroutines.Remove(unit);
+                }
+
+                var gauge = unit.m_WorkTimeGauge;
+                if (gauge != null)
+                {
+                    if (Timing.IsRunning(gauge._corhandle))
+                    {
+                        Timing.KillCoroutines(gauge._corhandle);
+                    }
+                    if (unit.Tf != null && gauge.transform != null)
+                    {
+                        gauge.transform.SetParent(unit.Tf);
+                        gauge.transform.localPosition = new Vector3(-0.02f, 0.1f, 0f);
+                    }
+                    if (gauge.gameObject != null && gauge.gameObject.activeSelf)
+                    {
+                        gauge.gameObject.SetActive(false);
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private bool PositionPuppetWorkGauge(GameUnit unit, WorkTimeGauge gauge, bool isTileTarget, Vector2 workTargetPos)
+        {
+            if (gauge == null || gauge.transform == null) return false;
+
+            if (isTileTarget)
+            {
+                C_Tile? tile = null;
+                if (workTargetPos != Vector2.zero)
+                {
+                    tile = GameMgr.Instance?._TileMgr?.GetTile(Mathf.RoundToInt(workTargetPos.x), Mathf.RoundToInt(workTargetPos.y));
+                }
+
+                if (tile != null && !tile.IsDestroy && tile.Tf != null)
+                {
+                    gauge.transform.SetParent(tile.Tf);
+                    gauge.transform.localPosition = new Vector3(0f, -0.4f, 0f);
+                    return true;
+                }
+
+                // Never fall back to attaching a tile-mining HP bar onto the citizen
+                StopPuppetWorkGauge(unit);
+                return false;
+            }
+
+            if (unit.Tf != null)
+            {
+                gauge.transform.SetParent(unit.Tf);
+                gauge.transform.localPosition = new Vector3(-0.02f, 0.1f, 0f);
+            }
+            return true;
+        }
+
+        public void SetPuppetWorkGaugeProgress(GameUnit unit, float normalizedWidth, bool isTileTarget = false, Vector2 workTargetPos = default)
         {
             if (unit == null || unit.m_WorkTimeGauge == null) return;
             try
             {
                 var gauge = unit.m_WorkTimeGauge;
+
+                // Authoritative Host progress overrides any fallback client timer for tile/world work
+                if (isTileTarget && _gaugeCoroutines.TryGetValue(unit, out var existing))
+                {
+                    if (Timing.IsRunning(existing)) Timing.KillCoroutines(existing);
+                    _gaugeCoroutines.Remove(unit);
+                }
+
+                if (!PositionPuppetWorkGauge(unit, gauge, isTileTarget, workTargetPos))
+                    return;
+
                 if (gauge.gameObject != null && !gauge.gameObject.activeSelf)
                 {
                     gauge.gameObject.SetActive(true);
                 }
                 if (gauge.m_Gauge != null)
                 {
-                    gauge.m_Gauge.size = new Vector2(Mathf.Clamp(normalizedWidth, 0f, 0.88f), 0.16f);
+                    gauge.m_Gauge.size = new Vector2(Mathf.Clamp01(normalizedWidth), gauge.m_Gauge.size.y);
                 }
             }
             catch { }
@@ -803,18 +907,29 @@ namespace RatopiaUnitBrain.Puppeteer
         private IEnumerator<float> PuppetGaugeCoroutine(GameUnit unit, float duration)
         {
             var gauge = unit.m_WorkTimeGauge;
-            if (gauge == null || gauge.gameObject == null || gauge.m_Gauge == null) yield break;
+            if (gauge == null || gauge.gameObject == null || gauge.m_Gauge == null)
+            {
+                _gaugeCoroutines.Remove(unit);
+                yield break;
+            }
 
             gauge.gameObject.SetActive(true);
             float elapsed = 0f;
             float maxDur = Mathf.Max(0.2f, duration);
 
-            while (elapsed < maxDur && unit != null && gauge.gameObject != null && gauge.gameObject.activeSelf)
+            try
             {
-                elapsed += Time.deltaTime;
-                float ratio = Mathf.Clamp01(elapsed / maxDur);
-                gauge.m_Gauge.size = new Vector2(0.88f * ratio, 0.16f);
-                yield return 0f;
+                while (elapsed < maxDur && unit != null && gauge != null && gauge.gameObject != null && gauge.gameObject.activeSelf)
+                {
+                    elapsed += Time.deltaTime;
+                    float ratio = Mathf.Clamp01(elapsed / maxDur);
+                    gauge.m_Gauge.size = new Vector2(ratio, gauge.m_Gauge.size.y);
+                    yield return 0f;
+                }
+            }
+            finally
+            {
+                if (unit != null) _gaugeCoroutines.Remove(unit);
             }
 
             if (gauge != null && gauge.gameObject != null)

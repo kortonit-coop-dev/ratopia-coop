@@ -20,6 +20,7 @@ namespace RatopiaCoop.Network
 
         public bool IsHost { get; private set; }
         public bool IsClient { get; private set; }
+        public bool IsClientActive => IsClient && _serverPeer != null && _serverPeer.ConnectionState != ConnectionState.Disconnected;
         public bool IsConnected => IsHost ? (_clientPeer != null && _clientPeer.ConnectionState == ConnectionState.Connected) 
                                           : (_serverPeer != null && _serverPeer.ConnectionState == ConnectionState.Connected);
 

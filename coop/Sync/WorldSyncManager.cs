@@ -3,6 +3,8 @@ using LiteNetLib;
 using LiteNetLib.Utils;
 using RatopiaCoop.Network;
 using RatopiaCoop.Patches;
+using RatopiaUnitBrain.Puppeteer;
+using RatopiaUnitBrain.Registry;
 using UnityEngine;
 
 namespace RatopiaCoop.Sync
@@ -13,6 +15,10 @@ namespace RatopiaCoop.Sync
 
         public bool IsApplyingRemoteTile { get; private set; }
         public bool IsApplyingRemoteWorldObject { get; private set; }
+        public bool IsApplyingRemoteBuildingWork { get; private set; }
+        public bool IsApplyingRemotePlantBP { get; private set; }
+        public GameUnit? OverrideConstructingWorkUnit { get; private set; }
+        public float OverrideConstructingWorkValue { get; private set; }
 
         // BUG FIX #8: Increase time sync frequency for better synchronization
         private float _timeSyncInterval = 0.5f; // Every 0.5 seconds (was 1.5s)
@@ -100,6 +106,20 @@ namespace RatopiaCoop.Sync
             CoopNetManager.Instance.SendPacket(PacketType.TileCreated, writer, DeliveryMethod.ReliableOrdered);
         }
 
+        public void SendTileHpUpdate(int x, int y, bool isWater, float hp, float maxHp)
+        {
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsHost) return;
+            if (SaveTransferManager.IsWorldLoading) return;
+
+            NetDataWriter writer = new NetDataWriter();
+            writer.Put(x);
+            writer.Put(y);
+            writer.Put(isWater);
+            writer.Put(hp);
+            writer.Put(maxHp);
+            CoopNetManager.Instance.SendPacket(PacketType.TileHpUpdate, writer, DeliveryMethod.ReliableOrdered);
+        }
+
         public void SendPlaceBlueprint(string buildInfoName, Vector2 pos, int attNum, int funcNum)
         {
             if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected) return;
@@ -114,7 +134,7 @@ namespace RatopiaCoop.Sync
             CoopNetManager.Instance.SendPacket(PacketType.OrderPlaceBlueprint, writer, DeliveryMethod.ReliableOrdered);
         }
 
-        public void SendCancelBlueprint(int x, int y)
+        public void SendCancelBlueprint(float x, float y)
         {
             if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected) return;
             if (SaveTransferManager.IsWorldLoading) return;
@@ -125,7 +145,7 @@ namespace RatopiaCoop.Sync
             CoopNetManager.Instance.SendPacket(PacketType.OrderCancelBlueprint, writer, DeliveryMethod.ReliableOrdered);
         }
 
-        public void SendBuildingCompleted(string buildName, Vector2 pos, int attNum)
+        public void SendBuildingCompleted(string buildName, Vector2 pos, int attNum, int funcNum = 0)
         {
             if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsHost) return;
 
@@ -134,10 +154,11 @@ namespace RatopiaCoop.Sync
             writer.Put(pos.x);
             writer.Put(pos.y);
             writer.Put(attNum);
+            writer.Put(funcNum);
             CoopNetManager.Instance.SendPacket(PacketType.BuildingCompleted, writer, DeliveryMethod.ReliableOrdered);
         }
 
-        public void SendBuildingDemolished(int x, int y)
+        public void SendBuildingDemolished(float x, float y)
         {
             if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsHost) return;
 
@@ -145,6 +166,39 @@ namespace RatopiaCoop.Sync
             writer.Put(x);
             writer.Put(y);
             CoopNetManager.Instance.SendPacket(PacketType.BuildingDemolished, writer, DeliveryMethod.ReliableOrdered);
+        }
+
+        public void SendRequestBlueprintWork(float posX, float posY, float workAmount, bool requestComplete)
+        {
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsClient) return;
+            if (SaveTransferManager.IsWorldLoading) return;
+
+            NetDataWriter writer = new NetDataWriter();
+            writer.Put(posX);
+            writer.Put(posY);
+            writer.Put(workAmount);
+            writer.Put(requestComplete);
+            CoopNetManager.Instance.SendPacket(PacketType.RequestBlueprintWork, writer, DeliveryMethod.ReliableOrdered);
+        }
+
+        public void SendBlueprintProgress(BP_Building bp)
+        {
+            if (bp == null || bp.m_MatBox == null || bp.m_MatBox.m_Slot == null) return;
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsHost) return;
+            if (SaveTransferManager.IsWorldLoading) return;
+
+            NetDataWriter writer = new NetDataWriter();
+            writer.Put(bp.Pos_Tile.x);
+            writer.Put(bp.Pos_Tile.y);
+            writer.Put((byte)bp.m_BuildState);
+            writer.Put(bp.m_CurTime);
+            byte slotCount = (byte)Mathf.Min(bp.m_MatBox.m_Slot.Length, 16);
+            writer.Put(slotCount);
+            for (int i = 0; i < slotCount; i++)
+            {
+                writer.Put(bp.m_MatBox.m_Slot[i] != null ? bp.m_MatBox.m_Slot[i].m_CurNum : 0);
+            }
+            CoopNetManager.Instance.SendPacket(PacketType.BlueprintProgressSync, writer, DeliveryMethod.ReliableOrdered);
         }
 
         private void SendTimeSync()
@@ -221,6 +275,19 @@ namespace RatopiaCoop.Sync
                     ApplyRemoteTileCreated(tType, x, y, attNum);
                     break;
                 }
+                case PacketType.TileHpUpdate:
+                {
+                    if (CoopNetManager.Instance.IsHost) break;
+                    if (reader.AvailableBytes < 17) break;
+
+                    int x = reader.GetInt();
+                    int y = reader.GetInt();
+                    bool isWater = reader.GetBool();
+                    float hp = reader.GetFloat();
+                    float maxHp = reader.GetFloat();
+                    ApplyRemoteTileHpUpdate(x, y, isWater, hp, maxHp);
+                    break;
+                }
                 case PacketType.OrderPlaceBlueprint:
                 {
                     string buildName = reader.GetString();
@@ -233,8 +300,8 @@ namespace RatopiaCoop.Sync
                 }
                 case PacketType.OrderCancelBlueprint:
                 {
-                    int x = reader.GetInt();
-                    int y = reader.GetInt();
+                    float x = reader.GetFloat();
+                    float y = reader.GetFloat();
                     ApplyRemoteCancelBlueprint(x, y);
                     break;
                 }
@@ -251,7 +318,8 @@ namespace RatopiaCoop.Sync
                     float posX = reader.GetFloat();
                     float posY = reader.GetFloat();
                     int att = reader.GetInt();
-                    ApplyRemoteBuildingCompleted(bName, new Vector2(posX, posY), att);
+                    int funcNum = reader.AvailableBytes >= 4 ? reader.GetInt() : 0;
+                    ApplyRemoteBuildingCompleted(bName, new Vector2(posX, posY), att, funcNum);
                     break;
                 }
                 case PacketType.BuildingDemolished:
@@ -263,8 +331,8 @@ namespace RatopiaCoop.Sync
                         break;
                     }
 
-                    int x = reader.GetInt();
-                    int y = reader.GetInt();
+                    float x = reader.GetFloat();
+                    float y = reader.GetFloat();
                     ApplyRemoteBuildingDemolished(x, y);
                     break;
                 }
@@ -407,12 +475,51 @@ namespace RatopiaCoop.Sync
                     if (!CoopNetManager.Instance.IsHost || SaveTransferManager.IsWorldLoading) break;
                     if (reader.AvailableBytes >= 14)
                     {
-                        int x = reader.GetInt();
-                        int y = reader.GetInt();
+                        float x = reader.GetFloat();
+                        float y = reader.GetFloat();
                         TileType tileType = (TileType)reader.GetShort();
                         int count = reader.GetInt();
                         HandleClientBlueprintDeposit(x, y, tileType, count);
                     }
+                    break;
+                }
+                case PacketType.RequestBlueprintWork:
+                {
+                    if (!CoopNetManager.Instance.IsHost || SaveTransferManager.IsWorldLoading) break;
+                    if (reader.AvailableBytes >= 13)
+                    {
+                        float x = reader.GetFloat();
+                        float y = reader.GetFloat();
+                        float workAmount = reader.GetFloat();
+                        bool requestComplete = reader.GetBool();
+                        HandleClientBlueprintWork(x, y, workAmount, requestComplete);
+                    }
+                    break;
+                }
+                case PacketType.BlueprintProgressSync:
+                {
+                    if (!CoopNetManager.Instance.IsClient || SaveTransferManager.IsWorldLoading) break;
+                    if (reader.AvailableBytes >= 14)
+                    {
+                        float x = reader.GetFloat();
+                        float y = reader.GetFloat();
+                        BP_State state = (BP_State)reader.GetByte();
+                        float curTime = reader.GetFloat();
+                        byte slotCount = reader.GetByte();
+                        int[] slotCurNums = new int[slotCount];
+                        for (int i = 0; i < slotCount && reader.AvailableBytes >= 4; i++)
+                        {
+                            slotCurNums[i] = reader.GetInt();
+                        }
+                        ApplyRemoteBlueprintProgress(x, y, state, curTime, slotCurNums);
+                    }
+                    break;
+                }
+                case PacketType.PlantBlueprintSync:
+                {
+                    if (SaveTransferManager.IsWorldLoading || reader.AvailableBytes < 9) break;
+                    byte op = reader.GetByte();
+                    HandlePlantBlueprintPacket(op, reader);
                     break;
                 }
             }
@@ -444,6 +551,7 @@ namespace RatopiaCoop.Sync
                     C_Tile? waterTile = tileMgr.GetWaterTile(x, y);
                     if (waterTile != null && !waterTile.IsDestroy)
                     {
+                        DetachPuppetWorkGauges(waterTile);
                         waterTile.DestroyTile(Dir_check: false);
                     }
                 }
@@ -452,8 +560,47 @@ namespace RatopiaCoop.Sync
                     C_Tile? mainTile = tileMgr.GetTile(x, y);
                     if (mainTile != null && !mainTile.IsDestroy)
                     {
+                        DetachPuppetWorkGauges(mainTile);
                         mainTile.DestroyTile(Dir_check: true);
                     }
+                }
+            }
+            finally
+            {
+                IsApplyingRemoteTile = false;
+            }
+        }
+
+        private void ApplyRemoteTileHpUpdate(int x, int y, bool isWater, float hp, float maxHp)
+        {
+            var tileMgr = GameMgr.Instance?._TileMgr;
+            if (tileMgr == null || !tileMgr.IsInsideMap(x, y)) return;
+
+            C_Tile? tile = isWater ? tileMgr.GetWaterTile(x, y) : tileMgr.GetTile(x, y);
+            if (tile == null || tile.IsDestroy) return;
+
+            try
+            {
+                IsApplyingRemoteTile = true;
+                if (maxHp > 0f) tile.m_MaxHP = maxHp;
+                float clampMax = tile.m_MaxHP > 0f ? tile.m_MaxHP : hp;
+                tile.m_HP = Mathf.Clamp(hp, 0f, clampMax);
+
+                if (!tile.IsWater)
+                {
+                    if (tile.m_HP < tile.m_MaxHP)
+                    {
+                        tile.TC_Effect_Check();
+                    }
+                    else
+                    {
+                        tile.Remove_TC_Effect();
+                    }
+                }
+
+                if (GameMgr.Instance?._OverView != null && GameMgr.Instance._OverView.m_Tile == tile)
+                {
+                    GameMgr.Instance._OverView.TileHpTxt_Update();
                 }
             }
             finally
@@ -477,80 +624,241 @@ namespace RatopiaCoop.Sync
             }
         }
 
+        private static void DetachPuppetWorkGauges(C_Tile tile)
+        {
+            if (tile == null || tile.Tf == null) return;
+            var gauges = tile.GetComponentsInChildren<WorkTimeGauge>(true);
+            if (gauges == null || gauges.Length == 0) return;
+
+            var allUnits = UnitRegistry.Instance.GetAllUnits();
+            for (int i = 0; i < gauges.Length; i++)
+            {
+                var g = gauges[i];
+                if (g == null) continue;
+                GameUnit? owner = null;
+                for (int j = 0; j < allUnits.Count; j++)
+                {
+                    if (allUnits[j] != null && allUnits[j].m_WorkTimeGauge == g)
+                    {
+                        owner = allUnits[j];
+                        break;
+                    }
+                }
+                if (owner != null)
+                {
+                    BrainPuppeteer.Instance.StopPuppetWorkGauge(owner);
+                }
+                else
+                {
+                    g.transform.SetParent(null);
+                    g.gameObject.SetActive(false);
+                }
+            }
+        }
+
+        private static BP_Building? FindBlueprintAt(float posX, float posY, BuildingName? expectedName = null)
+        {
+            var bpList = GameMgr.Instance?._BuildingMgr?.List_BP_BlueBuilding;
+            if (bpList == null) return null;
+
+            Vector2 target = new Vector2(posX, posY);
+            BP_Building? best = null;
+            float bestDistSq = 0.09f; // < 0.3 tiles prevents adjacent 0.5f / 1.0f collisions
+
+            for (int i = 0; i < bpList.Count; i++)
+            {
+                var bp = bpList[i];
+                if (bp == null || bp.m_BuildState == BP_State.Finish) continue;
+                if (expectedName.HasValue && bp.m_Info != null && bp.m_Info.Name != expectedName.Value) continue;
+
+                float distSq = (bp.Pos_Tile - target).sqrMagnitude;
+                if (distSq < bestDistSq)
+                {
+                    bestDistSq = distSq;
+                    best = bp;
+                }
+            }
+            return best;
+        }
+
+        private static BP_Plant? FindPlantBlueprintAt(float posX, float posY)
+        {
+            var list = GameMgr.Instance?._PoolMgr?.List_BP_Plant;
+            if (list == null) return null;
+
+            Vector2 target = new Vector2(posX, posY);
+            BP_Plant? best = null;
+            float bestDistSq = 0.09f;
+
+            for (int i = 0; i < list.Count; i++)
+            {
+                var bp = list[i];
+                if (bp == null || bp.m_BuildState == BP_State.Finish) continue;
+
+                float distSq = (bp.Pos_Tile - target).sqrMagnitude;
+                if (distSq < bestDistSq)
+                {
+                    bestDistSq = distSq;
+                    best = bp;
+                }
+            }
+            return best;
+        }
+
+        private static Building? FindBuildingAt(float posX, float posY)
+        {
+            var bMgr = GameMgr.Instance?._BuildingMgr;
+            if (bMgr == null) return null;
+
+            Vector2 target = new Vector2(posX, posY);
+            Building? best = null;
+            float bestDistSq = 0.09f;
+
+            void Scan(System.Collections.IList? list)
+            {
+                if (list == null) return;
+                for (int i = 0; i < list.Count; i++)
+                {
+                    if (list[i] is Building b && b != null)
+                    {
+                        float d = (b.Pos_Tile - target).sqrMagnitude;
+                        if (d < bestDistSq)
+                        {
+                            bestDistSq = d;
+                            best = b;
+                        }
+                    }
+                }
+            }
+
+            Scan(bMgr.List_Building);
+            if (best == null) Scan(bMgr.List_HeavyWire);
+            if (best == null) Scan(bMgr.List_Wallpaper);
+            return best;
+        }
+
         private void ApplyRemoteBlueprint(string buildNameStr, Vector2 pos, int att, int func)
         {
             if (SaveTransferManager.IsWorldLoading) return;
             if (GameMgr.Instance == null || GameMgr.Instance._BuildingMgr == null || GameMgr.Instance._DB_Mgr == null) return;
 
-            int rx = Mathf.RoundToInt(pos.x);
-            int ry = Mathf.RoundToInt(pos.y);
-            var bpList = GameMgr.Instance._BuildingMgr.List_BP_BlueBuilding;
-            if (bpList != null && bpList.Exists(b => b != null && Mathf.RoundToInt(b.Pos_Tile.x) == rx && Mathf.RoundToInt(b.Pos_Tile.y) == ry))
+            if (!Enum.TryParse<BuildingName>(buildNameStr, out var bName))
             {
-                // Prevent duplicate blueprint stacking at the same coordinates
+                Plugin.Log.LogWarning($"[WorldSyncManager] ApplyRemoteBlueprint: Unknown BuildingName '{buildNameStr}'");
                 return;
             }
 
-            if (Enum.TryParse<BuildingName>(buildNameStr, out var bName))
+            if (FindBlueprintAt(pos.x, pos.y) != null)
             {
-                BuildInfo? info = GameMgr.Instance._DB_Mgr.Dic_BuildDB.ContainsKey(bName) 
-                    ? GameMgr.Instance._DB_Mgr.Dic_BuildDB[bName] 
-                    : (GameMgr.Instance._DB_Mgr.Dic_BlockBuildDB.ContainsKey(bName) ? GameMgr.Instance._DB_Mgr.Dic_BlockBuildDB[bName] : null);
+                // Prevent duplicate blueprint stacking at the exact coordinates
+                return;
+            }
 
-                if (info != null && GameMgr.Instance._PoolMgr != null && GameMgr.Instance._PoolMgr.Pool_BP_Building != null)
+            BuildInfo? info = GameMgr.Instance._DB_Mgr.Dic_BuildDB.ContainsKey(bName)
+                ? GameMgr.Instance._DB_Mgr.Dic_BuildDB[bName]
+                : (GameMgr.Instance._DB_Mgr.Dic_BlockBuildDB.ContainsKey(bName) ? GameMgr.Instance._DB_Mgr.Dic_BlockBuildDB[bName] : null);
+
+            if (info == null)
+            {
+                Plugin.Log.LogWarning($"[WorldSyncManager] ApplyRemoteBlueprint: No BuildInfo for '{bName}'");
+                return;
+            }
+
+            if (GameMgr.Instance._PoolMgr != null && GameMgr.Instance._PoolMgr.Pool_BP_Building != null)
+            {
+                var sys = GameMgr.Instance._SysMgr;
+                int savedMoveId = sys != null ? sys.m_TargetMovementID : 99999;
+                int savedCopyId = sys != null ? sys.m_TaregCopyID : 99999;
+                try
                 {
-                    try
+                    BuildingPatches.SetSyncingBlueprint(true);
+                    if (sys != null)
                     {
-                        BuildingPatches.SetSyncingBlueprint(true);
-                        var bp = GameMgr.Instance._PoolMgr.Pool_BP_Building.GetNextObj()?.GetComponent<BP_Building>();
-                        bp?.BluePrintSet(info, pos, att, func);
+                        sys.m_TargetMovementID = 99999;
+                        sys.m_TaregCopyID = 99999;
                     }
-                    finally
+                    var bp = GameMgr.Instance._PoolMgr.Pool_BP_Building.GetNextObj()?.GetComponent<BP_Building>();
+                    bp?.BluePrintSet(info, pos, att, func);
+                }
+                finally
+                {
+                    if (sys != null)
                     {
-                        BuildingPatches.SetSyncingBlueprint(false);
+                        sys.m_TargetMovementID = savedMoveId;
+                        sys.m_TaregCopyID = savedCopyId;
                     }
+                    BuildingPatches.SetSyncingBlueprint(false);
                 }
             }
         }
 
-        private void ApplyRemoteCancelBlueprint(int x, int y)
+        private void ApplyRemoteCancelBlueprint(float x, float y)
         {
             if (GameMgr.Instance == null || GameMgr.Instance._BuildingMgr == null) return;
 
-            var bpList = GameMgr.Instance._BuildingMgr.List_BP_BlueBuilding;
-            if (bpList != null)
+            var bp = FindBlueprintAt(x, y);
+            if (bp != null)
             {
-                var bp = bpList.Find(b => Mathf.RoundToInt(b.Pos_Tile.x) == x && Mathf.RoundToInt(b.Pos_Tile.y) == y);
-                if (bp != null)
+                try
                 {
-                    try
-                    {
-                        BuildingPatches.SetSyncingBlueprint(true);
-                        bp.CancelBP();
-                    }
-                    finally
-                    {
-                        BuildingPatches.SetSyncingBlueprint(false);
-                    }
+                    BuildingPatches.SetSyncingBlueprint(true);
+                    bp.CancelBP();
+                }
+                finally
+                {
+                    BuildingPatches.SetSyncingBlueprint(false);
                 }
             }
         }
 
-        private void ApplyRemoteBuildingCompleted(string buildNameStr, Vector2 pos, int attNum)
+        private void ApplyRemoteBuildingCompleted(string buildNameStr, Vector2 pos, int attNum, int funcNum)
         {
             if (GameMgr.Instance == null || GameMgr.Instance._BuildingMgr == null) return;
+
+            bool parsed = Enum.TryParse<BuildingName>(buildNameStr, out var bName);
+            BP_Building? matchingBp = parsed
+                ? (FindBlueprintAt(pos.x, pos.y, bName) ?? FindBlueprintAt(pos.x, pos.y))
+                : FindBlueprintAt(pos.x, pos.y);
+            int effectiveFuncNum = funcNum != 0 ? funcNum : (matchingBp != null ? matchingBp.m_FuncNum : 0);
 
             // Silently clear matching blueprint WITHOUT calling CancelBP(), which would dump duplicate mats onto the floor
-            int x = Mathf.RoundToInt(pos.x);
-            int y = Mathf.RoundToInt(pos.y);
-            SilentlyFinishBlueprint(x, y);
+            SilentlyFinishBlueprint(pos.x, pos.y, matchingBp);
 
-            if (Enum.TryParse<BuildingName>(buildNameStr, out var bName))
+            if (parsed)
             {
                 try
                 {
                     BuildingPatches.SetSyncingBuildSet(true);
-                    GameMgr.Instance._BuildingMgr.BuildSet(bName, pos, attNum);
+                    Building? building = GameMgr.Instance._BuildingMgr.BuildSet(bName, pos, attNum);
+                    if (building != null)
+                    {
+                        if (effectiveFuncNum != 0)
+                        {
+                            if (building.m_Info.Ability == BuildAbility.Gravegarden || building.m_Info.Ability == BuildAbility.Minigarden)
+                            {
+                                building.m_ProductIndex = effectiveFuncNum - 1;
+                                building.m_BuildInfoUI?.InfoUpdate();
+                            }
+                            if (!building.m_Info.List_Condition.Contains(BuildCondition.FixRange) && building.m_Info.Range > 0)
+                            {
+                                building.m_Range = effectiveFuncNum;
+                            }
+                            building.ApplyFuncNum(effectiveFuncNum);
+                        }
+
+                        try
+                        {
+                            if (GameMgr.Instance._PoolMgr?.Pool_BuildSmokeEffect != null && building.m_Info != null)
+                            {
+                                GameMgr.Instance._PoolMgr.Pool_BuildSmokeEffect.GetNextObj()?.GetComponent<BuildSmokeEffect>()?.BSE_EffectSet(pos, building.m_Info.Width);
+                            }
+                            if (GameMgr.Instance._CamMgr?.m_MainCam != null)
+                            {
+                                CasselGames.Audio.AudioController.PlaySFXOneShot("SFX_Build_Wood_Complete", GameMgr.Instance._CamMgr.m_MainCam.transform.position, building.Tf.position);
+                            }
+                        }
+                        catch { }
+                    }
                 }
                 finally
                 {
@@ -559,11 +867,11 @@ namespace RatopiaCoop.Sync
             }
         }
 
-        private void SilentlyFinishBlueprint(int x, int y)
+        private void SilentlyFinishBlueprint(float x, float y, BP_Building? knownBp = null)
         {
             if (GameMgr.Instance?._BuildingMgr?.List_BP_BlueBuilding == null) return;
             var bpList = GameMgr.Instance._BuildingMgr.List_BP_BlueBuilding;
-            var bp = bpList.Find(b => b != null && Mathf.RoundToInt(b.Pos_Tile.x) == x && Mathf.RoundToInt(b.Pos_Tile.y) == y);
+            var bp = knownBp ?? FindBlueprintAt(x, y);
             if (bp == null) return;
 
             try
@@ -577,13 +885,33 @@ namespace RatopiaCoop.Sync
                         bp.m_Unit.m_WorkTimeGauge.StopGauge(TypeOrder.Constructing);
                         bp.m_Unit.BehaviorStop();
                     }
+                    else if (bp.m_Unit.m_UnitKind == UnitKind.Queen && bp.m_Unit.m_CharState == CharState.Building)
+                    {
+                        bp.m_Unit.BehaviorStop();
+                    }
                     bp.m_Unit = null;
+                }
+
+                var localQueen = QueenSyncManager.Instance?.LocalCharacter;
+                if (localQueen != null && localQueen.m_CheckBox != null && localQueen.m_CheckBox.m_BP_Building == bp)
+                {
+                    if (localQueen.m_CharState == CharState.Building)
+                    {
+                        localQueen.BehaviorStop();
+                    }
+                    localQueen.m_CheckBox.m_BP_Building = null;
+                }
+
+                if (bp.m_Scaffolding != null && bp.m_Scaffolding.gameObject != null)
+                {
+                    bp.m_Scaffolding.gameObject.SetActive(false);
                 }
                 bpList.Remove(bp);
                 if (GameMgr.Instance._PoolMgr?.Pool_BP_Building != null && bp.gameObject != null)
                 {
                     GameMgr.Instance._PoolMgr.Pool_BP_Building.AddObj(bp.gameObject);
                 }
+                GameMgr.Instance._UnionUI?.m_BluePrintNumUI?.NumUpdate();
             }
             catch (Exception ex)
             {
@@ -591,25 +919,21 @@ namespace RatopiaCoop.Sync
             }
         }
 
-        private void ApplyRemoteBuildingDemolished(int x, int y)
+        private void ApplyRemoteBuildingDemolished(float x, float y)
         {
             if (GameMgr.Instance == null || GameMgr.Instance._BuildingMgr == null) return;
 
-            var buildingList = GameMgr.Instance._BuildingMgr.List_Building;
-            if (buildingList != null)
+            var target = FindBuildingAt(x, y);
+            if (target != null)
             {
-                var target = buildingList.Find(b => Mathf.RoundToInt(b.Pos_Tile.x) == x && Mathf.RoundToInt(b.Pos_Tile.y) == y);
-                if (target != null)
+                try
                 {
-                    try
-                    {
-                        BuildingPatches.SetSyncingDemolition(true);
-                        target.BuildingDemolition(false);
-                    }
-                    finally
-                    {
-                        BuildingPatches.SetSyncingDemolition(false);
-                    }
+                    BuildingPatches.SetSyncingDemolition(true);
+                    target.BuildingDemolition(false);
+                }
+                finally
+                {
+                    BuildingPatches.SetSyncingDemolition(false);
                 }
             }
         }
@@ -729,7 +1053,7 @@ namespace RatopiaCoop.Sync
             }
         }
 
-        public void SendRequestBlueprintDeposit(int x, int y, TileType tileType, int count)
+        public void SendRequestBlueprintDeposit(float x, float y, TileType tileType, int count)
         {
             if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsClient) return;
             if (SaveTransferManager.IsWorldLoading || count <= 0) return;
@@ -742,23 +1066,454 @@ namespace RatopiaCoop.Sync
             CoopNetManager.Instance.SendPacket(PacketType.RequestBlueprintDeposit, writer, DeliveryMethod.ReliableOrdered);
         }
 
-        private void HandleClientBlueprintDeposit(int x, int y, TileType tileType, int count)
+        private void HandleClientBlueprintDeposit(float x, float y, TileType tileType, int count)
         {
-            var bpList = GameMgr.Instance?._BuildingMgr?.List_BP_BlueBuilding;
-            if (bpList == null) return;
-
-            var bp = bpList.Find(b => b != null && Mathf.RoundToInt(b.Pos_Tile.x) == x && Mathf.RoundToInt(b.Pos_Tile.y) == y);
+            var bp = FindBlueprintAt(x, y);
             if (bp == null) return;
 
             var clientWorker = QueenSyncManager.Instance?.Player2Worker;
-            bp.AddMatValue(tileType, count);
-            if (clientWorker != null)
+            bool added = bp.AddMatValue(tileType, count);
+            if (added && clientWorker != null)
             {
                 for (int i = 0; i < count; i++)
                 {
                     clientWorker.Remove_GatheringObj(tileType);
                 }
             }
+            else if (!added)
+            {
+                SendBlueprintProgress(bp);
+            }
+        }
+
+        private void HandleClientBlueprintWork(float posX, float posY, float workAmount, bool requestComplete)
+        {
+            var bp = FindBlueprintAt(posX, posY);
+            if (bp == null || bp.m_BuildState == BP_State.Finish) return;
+
+            if (bp.m_BuildState != BP_State.Construct)
+            {
+                if (bp.IsReadyToBuild())
+                {
+                    bp.SetReadyToBuild();
+                }
+                else
+                {
+                    SendBlueprintProgress(bp);
+                    return;
+                }
+            }
+
+            GameUnit? worker = (GameUnit?)QueenSyncManager.Instance?.Player2Worker ?? QueenSyncManager.Instance?.LocalCharacter;
+            if (worker == null) return;
+
+            float effectiveWork = Mathf.Clamp(workAmount, 0.001f, Mathf.Max(5f, bp.m_MaxTime + 1f));
+            if (requestComplete && (bp.m_CurTime + effectiveWork) >= bp.m_MaxTime - 0.05f)
+            {
+                effectiveWork = Mathf.Max(effectiveWork, bp.m_MaxTime - bp.m_CurTime + 0.01f);
+            }
+
+            try
+            {
+                IsApplyingRemoteBuildingWork = true;
+                OverrideConstructingWorkUnit = worker;
+                OverrideConstructingWorkValue = effectiveWork;
+                bp.BuildingUpdate_Call(worker);
+            }
+            finally
+            {
+                OverrideConstructingWorkUnit = null;
+                OverrideConstructingWorkValue = 0f;
+                IsApplyingRemoteBuildingWork = false;
+            }
+        }
+
+        private void ApplyRemoteBlueprintProgress(float posX, float posY, BP_State state, float curTime, int[] slotCurNums)
+        {
+            var bp = FindBlueprintAt(posX, posY);
+            if (bp == null || bp.m_BuildState == BP_State.Finish) return;
+
+            try
+            {
+                IsApplyingRemoteBuildingWork = true;
+                ApplyRemoteMatBoxSlots(bp.m_MatBox, slotCurNums);
+
+                if (state == BP_State.Construct && bp.m_BuildState != BP_State.Construct)
+                {
+                    bp.SetReadyToBuild();
+                }
+
+                if (bp.m_BuildState == BP_State.Construct)
+                {
+                    bp.m_CurTime = Mathf.Clamp(curTime, 0f, Mathf.Max(0f, bp.m_MaxTime - 0.001f));
+                    float ratio = bp.m_MaxTime > 0f ? Mathf.Clamp01(bp.m_CurTime / bp.m_MaxTime) : 0f;
+                    bp.m_Scaffolding?.RemoteUpdate(ratio);
+                    UpdateBlueprintGaugeVisual(bp.m_Spr_Gauge, bp.m_Info != null ? bp.m_Info.Width : 1f, ratio);
+                }
+
+                if (GameMgr.Instance?._OverView != null && GameMgr.Instance._OverView.m_BP_Building == bp)
+                {
+                    GameMgr.Instance._OverView.Set_Update();
+                    GameMgr.Instance._OverView.BP_GaugeUpdate();
+                }
+            }
+            finally
+            {
+                IsApplyingRemoteBuildingWork = false;
+            }
+        }
+
+        private static void ApplyRemoteMatBoxSlots(BP_MatBox? matBox, int[] slotCurNums)
+        {
+            if (matBox?.m_Slot == null || slotCurNums == null) return;
+            int len = Mathf.Min(matBox.m_Slot.Length, slotCurNums.Length);
+            for (int i = 0; i < len; i++)
+            {
+                var slot = matBox.m_Slot[i];
+                if (slot == null) continue;
+                int delta = slotCurNums[i] - slot.m_CurNum;
+                if (delta != 0)
+                {
+                    slot.AddValue(delta);
+                }
+            }
+        }
+
+        private static float? _cachedMiningFixValue;
+
+        public static float GetPlantWorkStep(GameUnit unit)
+        {
+            if (!_cachedMiningFixValue.HasValue)
+            {
+                float val = 10f;
+                try
+                {
+                    var definesType = typeof(BP_Plant).Assembly.GetType("Defines");
+                    var field = definesType?.GetField("Mining_FixValue", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                    if (field?.GetValue(null) is float f && f > 0f)
+                    {
+                        val = f;
+                    }
+                }
+                catch { }
+                _cachedMiningFixValue = val;
+            }
+            return _cachedMiningFixValue.Value * (1f + unit.GetPDI(PDI.Dex) * 0.01f);
+        }
+
+        private static void UpdateBlueprintGaugeVisual(SpriteRenderer? gauge, float width, float ratio)
+        {
+            if (gauge == null) return;
+            gauge.size = new Vector2(ratio * width, gauge.size.y);
+        }
+
+        private const byte PlantOpPlace = 0;
+        private const byte PlantOpCancel = 1;
+        private const byte PlantOpDeposit = 2;
+        private const byte PlantOpWork = 3;
+        private const byte PlantOpProgress = 4;
+        private const byte PlantOpComplete = 5;
+
+        public void SendPlantBlueprintPlace(short tileType, Vector2 pos, int masterId)
+        {
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || SaveTransferManager.IsWorldLoading) return;
+
+            Building? master = masterId > 0 ? GameMgr.Instance?._BuildingMgr?.List_Building?.Find(b => b != null && b.m_ID == masterId) : null;
+            NetDataWriter writer = new NetDataWriter();
+            writer.Put(PlantOpPlace);
+            writer.Put(tileType);
+            writer.Put(pos.x);
+            writer.Put(pos.y);
+            writer.Put(master != null);
+            if (master != null)
+            {
+                writer.Put(master.Pos_Tile.x);
+                writer.Put(master.Pos_Tile.y);
+            }
+            CoopNetManager.Instance.SendPacket(PacketType.PlantBlueprintSync, writer, DeliveryMethod.ReliableOrdered);
+        }
+
+        public void SendPlantBlueprintCancel(Vector2 pos)
+        {
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || SaveTransferManager.IsWorldLoading) return;
+
+            NetDataWriter writer = new NetDataWriter();
+            writer.Put(PlantOpCancel);
+            writer.Put(pos.x);
+            writer.Put(pos.y);
+            CoopNetManager.Instance.SendPacket(PacketType.PlantBlueprintSync, writer, DeliveryMethod.ReliableOrdered);
+        }
+
+        public void SendPlantBlueprintDeposit(Vector2 pos, TileType tileType, int count)
+        {
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsClient) return;
+            if (SaveTransferManager.IsWorldLoading || count <= 0) return;
+
+            NetDataWriter writer = new NetDataWriter();
+            writer.Put(PlantOpDeposit);
+            writer.Put(pos.x);
+            writer.Put(pos.y);
+            writer.Put((short)tileType);
+            writer.Put(count);
+            CoopNetManager.Instance.SendPacket(PacketType.PlantBlueprintSync, writer, DeliveryMethod.ReliableOrdered);
+        }
+
+        public void SendPlantBlueprintWork(Vector2 pos, float workAmount, bool requestComplete)
+        {
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsClient) return;
+            if (SaveTransferManager.IsWorldLoading) return;
+
+            NetDataWriter writer = new NetDataWriter();
+            writer.Put(PlantOpWork);
+            writer.Put(pos.x);
+            writer.Put(pos.y);
+            writer.Put(workAmount);
+            writer.Put(requestComplete);
+            CoopNetManager.Instance.SendPacket(PacketType.PlantBlueprintSync, writer, DeliveryMethod.ReliableOrdered);
+        }
+
+        public void SendPlantBlueprintProgress(BP_Plant bp)
+        {
+            if (bp == null || bp.m_MatBox == null || bp.m_MatBox.m_Slot == null) return;
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsHost) return;
+            if (SaveTransferManager.IsWorldLoading) return;
+
+            NetDataWriter writer = new NetDataWriter();
+            writer.Put(PlantOpProgress);
+            writer.Put(bp.Pos_Tile.x);
+            writer.Put(bp.Pos_Tile.y);
+            writer.Put((byte)bp.m_BuildState);
+            writer.Put(bp.m_CurTime);
+            byte slotCount = (byte)Mathf.Min(bp.m_MatBox.m_Slot.Length, 16);
+            writer.Put(slotCount);
+            for (int i = 0; i < slotCount; i++)
+            {
+                writer.Put(bp.m_MatBox.m_Slot[i] != null ? bp.m_MatBox.m_Slot[i].m_CurNum : 0);
+            }
+            CoopNetManager.Instance.SendPacket(PacketType.PlantBlueprintSync, writer, DeliveryMethod.ReliableOrdered);
+        }
+
+        public void SendPlantBlueprintCompleted(Vector2 pos)
+        {
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsHost) return;
+            if (SaveTransferManager.IsWorldLoading) return;
+
+            NetDataWriter writer = new NetDataWriter();
+            writer.Put(PlantOpComplete);
+            writer.Put(pos.x);
+            writer.Put(pos.y);
+            CoopNetManager.Instance.SendPacket(PacketType.PlantBlueprintSync, writer, DeliveryMethod.ReliableOrdered);
+        }
+
+        private void HandlePlantBlueprintPacket(byte op, NetDataReader reader)
+        {
+            switch (op)
+            {
+                case PlantOpPlace:
+                {
+                    if (reader.AvailableBytes < 11) break;
+                    TileType tType = (TileType)reader.GetShort();
+                    Vector2 pos = new Vector2(reader.GetFloat(), reader.GetFloat());
+                    bool hasMaster = reader.GetBool();
+                    Building? master = hasMaster && reader.AvailableBytes >= 8
+                        ? FindBuildingAt(reader.GetFloat(), reader.GetFloat())
+                        : null;
+
+                    if (FindPlantBlueprintAt(pos.x, pos.y) != null || GameMgr.Instance?._PoolMgr?.Pool_BP_Plant == null) break;
+                    try
+                    {
+                        IsApplyingRemotePlantBP = true;
+                        BuildingPatches.SetSyncingPlantBlueprint(true);
+                        var bp = GameMgr.Instance._PoolMgr.Pool_BP_Plant.GetNextObj()?.GetComponent<BP_Plant>();
+                        if (bp != null)
+                        {
+                            bp.PlantPrintSet(tType, pos, master != null ? master.m_ID : -1);
+                            LinkPlantBlueprintToMaster(master, bp, tType);
+                        }
+                    }
+                    finally
+                    {
+                        BuildingPatches.SetSyncingPlantBlueprint(false);
+                        IsApplyingRemotePlantBP = false;
+                    }
+                    break;
+                }
+                case PlantOpCancel:
+                {
+                    if (reader.AvailableBytes < 8) break;
+                    var bp = FindPlantBlueprintAt(reader.GetFloat(), reader.GetFloat());
+                    if (bp == null) break;
+                    try
+                    {
+                        IsApplyingRemotePlantBP = true;
+                        BuildingPatches.SetSyncingPlantBlueprint(true);
+                        ClearMasterPlantBlueprintRef(bp);
+                        bp.CancelBP();
+                    }
+                    finally
+                    {
+                        BuildingPatches.SetSyncingPlantBlueprint(false);
+                        IsApplyingRemotePlantBP = false;
+                    }
+                    break;
+                }
+                case PlantOpDeposit:
+                {
+                    if (!CoopNetManager.Instance.IsHost || reader.AvailableBytes < 14) break;
+                    var bp = FindPlantBlueprintAt(reader.GetFloat(), reader.GetFloat());
+                    if (bp == null) break;
+                    TileType tileType = (TileType)reader.GetShort();
+                    int count = reader.GetInt();
+                    bool added = bp.AddMatValue(tileType, count);
+                    var clientWorker = QueenSyncManager.Instance?.Player2Worker;
+                    if (added && clientWorker != null)
+                    {
+                        for (int i = 0; i < count; i++)
+                        {
+                            clientWorker.Remove_GatheringObj(tileType);
+                        }
+                    }
+                    else if (!added)
+                    {
+                        SendPlantBlueprintProgress(bp);
+                    }
+                    break;
+                }
+                case PlantOpWork:
+                {
+                    if (!CoopNetManager.Instance.IsHost || reader.AvailableBytes < 13) break;
+                    var bp = FindPlantBlueprintAt(reader.GetFloat(), reader.GetFloat());
+                    if (bp == null || bp.m_BuildState == BP_State.Finish) break;
+                    float workAmount = reader.GetFloat();
+                    bool requestComplete = reader.GetBool();
+
+                    if (bp.m_BuildState != BP_State.Construct)
+                    {
+                        if (bp.IsReadyToBuild()) bp.SetReadyToBuild();
+                        else { SendPlantBlueprintProgress(bp); break; }
+                    }
+
+                    GameUnit? worker = (GameUnit?)QueenSyncManager.Instance?.Player2Worker ?? QueenSyncManager.Instance?.LocalCharacter;
+                    if (worker == null) break;
+
+                    float vanillaStep = GetPlantWorkStep(worker);
+                    float targetWork = Mathf.Clamp(workAmount, 0.001f, Mathf.Max(5f, bp.m_MaxTime + 1f));
+                    if (requestComplete && bp.m_CurTime + targetWork >= bp.m_MaxTime - 0.05f)
+                    {
+                        targetWork = Mathf.Max(targetWork, bp.m_MaxTime - bp.m_CurTime + 0.01f);
+                    }
+
+                    bp.m_CurTime = Mathf.Max(0f, bp.m_CurTime + (targetWork - vanillaStep));
+                    try
+                    {
+                        IsApplyingRemotePlantBP = true;
+                        bp.PlantUpdate_Call(worker);
+                    }
+                    finally
+                    {
+                        IsApplyingRemotePlantBP = false;
+                    }
+                    break;
+                }
+                case PlantOpProgress:
+                {
+                    if (!CoopNetManager.Instance.IsClient || reader.AvailableBytes < 14) break;
+                    var bp = FindPlantBlueprintAt(reader.GetFloat(), reader.GetFloat());
+                    if (bp == null || bp.m_BuildState == BP_State.Finish) break;
+                    BP_State state = (BP_State)reader.GetByte();
+                    float curTime = reader.GetFloat();
+                    byte slotCount = reader.GetByte();
+                    int[] slotCurNums = new int[slotCount];
+                    for (int i = 0; i < slotCount && reader.AvailableBytes >= 4; i++)
+                    {
+                        slotCurNums[i] = reader.GetInt();
+                    }
+                    try
+                    {
+                        IsApplyingRemotePlantBP = true;
+                        ApplyRemoteMatBoxSlots(bp.m_MatBox, slotCurNums);
+                        if (state == BP_State.Construct && bp.m_BuildState != BP_State.Construct)
+                        {
+                            bp.SetReadyToBuild();
+                        }
+                        if (bp.m_BuildState == BP_State.Construct)
+                        {
+                            bp.m_CurTime = Mathf.Clamp(curTime, 0f, Mathf.Max(0f, bp.m_MaxTime - 0.001f));
+                            float ratio = bp.m_MaxTime > 0f ? Mathf.Clamp01(bp.m_CurTime / bp.m_MaxTime) : 0f;
+                            UpdateBlueprintGaugeVisual(bp.m_Spr_Gauge, bp.m_Info != null ? bp.m_Info.Width : 1f, ratio);
+                        }
+                        if (GameMgr.Instance?._OverView != null && GameMgr.Instance._OverView.m_BP_Plant == bp)
+                        {
+                            GameMgr.Instance._OverView.BP_Plant_GaugeUpdate();
+                        }
+                    }
+                    finally
+                    {
+                        IsApplyingRemotePlantBP = false;
+                    }
+                    break;
+                }
+                case PlantOpComplete:
+                {
+                    if (!CoopNetManager.Instance.IsClient || reader.AvailableBytes < 8) break;
+                    var bp = FindPlantBlueprintAt(reader.GetFloat(), reader.GetFloat());
+                    if (bp == null) break;
+                    try
+                    {
+                        IsApplyingRemotePlantBP = true;
+                        bp.m_BuildState = BP_State.Finish;
+                        if (bp.m_Unit != null)
+                        {
+                            if (bp.m_Unit.m_UnitKind == UnitKind.Queen && bp.m_Unit.m_CharState == CharState.Planting)
+                            {
+                                bp.m_Unit.BehaviorStop();
+                            }
+                            bp.m_Unit = null;
+                        }
+                        var localQueen = QueenSyncManager.Instance?.LocalCharacter;
+                        if (localQueen != null && localQueen.m_CheckBox != null && localQueen.m_CheckBox.m_BP_Plant == bp)
+                        {
+                            if (localQueen.m_CharState == CharState.Planting)
+                            {
+                                localQueen.BehaviorStop();
+                            }
+                            localQueen.m_CheckBox.m_BP_Plant = null;
+                        }
+                        ClearMasterPlantBlueprintRef(bp);
+                        GameMgr.Instance?._PoolMgr?.List_BP_Plant?.Remove(bp);
+                        if (GameMgr.Instance?._PoolMgr?.Pool_BP_Plant != null && bp.gameObject != null)
+                        {
+                            GameMgr.Instance._PoolMgr.Pool_BP_Plant.AddObj(bp.gameObject);
+                        }
+                    }
+                    finally
+                    {
+                        IsApplyingRemotePlantBP = false;
+                    }
+                    break;
+                }
+            }
+        }
+
+        private static void LinkPlantBlueprintToMaster(Building? master, BP_Plant bp, TileType tileType)
+        {
+            if (master == null) return;
+            if (master.m_Info?.List_Effect3 != null)
+            {
+                int idx = master.m_Info.List_Effect3.IndexOf(tileType);
+                if (idx >= 0) master.m_ProductIndex = idx;
+            }
+            if (master.m_BuildInfoUI is MinigardenInfo mg) mg.m_BP_Plant = bp;
+            else if (master.m_BuildInfoUI is GraveInfo gr) gr.m_BP_Plant = bp;
+        }
+
+        private static void ClearMasterPlantBlueprintRef(BP_Plant bp)
+        {
+            if (bp == null || GameMgr.Instance?._BuildingMgr?.List_Building == null) return;
+            var master = GameMgr.Instance._BuildingMgr.List_Building.Find(b => b != null && b.m_ID == bp.m_MasterID);
+            if (master == null) return;
+            if (master.m_BuildInfoUI is MinigardenInfo mg && mg.m_BP_Plant == bp) mg.m_BP_Plant = null;
+            else if (master.m_BuildInfoUI is GraveInfo gr && gr.m_BP_Plant == bp) gr.m_BP_Plant = null;
         }
 
         public void SendRequestHarvestWorldObj(int x, int y)

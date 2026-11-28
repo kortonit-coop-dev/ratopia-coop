@@ -24,19 +24,94 @@ namespace RatopiaCoop.Patches
         // GROUND ITEMS (TileObject)
         // =========================================================================
 
+        private static bool _isInGatherFromBuilding;
+        private static bool _isInLocalDrop;
+        public static bool IsStorageUiOpen { get; private set; }
+        public static Building? OpenStorageBuilding { get; private set; }
+
+        public static bool IsStorageUIOpenFor(Building building)
+        {
+            if (building == null || !IsStorageUiOpen) return false;
+            var storageUi = GameMgr.Instance?._StorageUI;
+            if (storageUi == null || !storageUi.enabled) return false;
+
+            var objMain = Traverse.Create(storageUi).Field<GameObject>("Obj_Main").Value;
+            if (objMain == null || !objMain.activeInHierarchy) return false;
+
+            if (OpenStorageBuilding == building || storageUi.m_Building_Storage == building) return true;
+            var storageInfo = Traverse.Create(storageUi).Field<BuildInfoUI>("m_StorageInfo").Value;
+            return storageInfo != null && storageInfo.m_Building == building;
+        }
+
         [HarmonyPatch(typeof(TileObject), nameof(TileObject.ObjectInit), new Type[] { typeof(TileType), typeof(TObjState), typeof(Vector3), typeof(int), typeof(bool) })]
         [HarmonyPrefix]
-        public static bool TileObject_ObjectInit_Prefix(TileType _type, TObjState _state, int _num)
+        public static bool TileObject_ObjectInit_Prefix(TileObject __instance, ref TileObject __result, TileType _type, TObjState _state, int _num)
         {
             if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsClient) return true;
             if (ItemSyncManager.IsApplyingRemoteItem || SaveTransferManager.IsWorldLoading) return true;
 
-            // Suppress StorageUI.DropObj_Function local TileObject spawn; Host spawns authoritatively & replicates
-            if (_state == TObjState.NeedSave && _pendingEjectBuilding != null && Time.unscaledTime - _pendingEjectTime < 60f && _type == _pendingEjectType)
+            // Allow temporary hand-item wrappers (storage withdraw, citizen/bot carry, local drop animation)
+            if (_isInGatherFromBuilding || _isInLocalDrop || _type == TileType.A_Citizen || _type == TileType.GBot)
             {
-                return false;
+                return true;
             }
-            return true;
+
+            // Suppress all non-authoritative Client ground item spawns (tile breaks, plant drops, enemy drops,
+            // WorkTimeGauge bonus drops, StorageUI.DropObj_Function, etc.) and cleanly return pooled object.
+            if (__instance != null)
+            {
+                if (__instance.Tf == null) __instance.Tf = __instance.transform;
+                if (__instance.Obj == null) __instance.Obj = __instance.gameObject;
+                __instance.m_Info ??= new TileSt_Info(_type, _state, 0);
+                __instance.m_Info.m_Type = _type;
+                __instance.m_Info.m_State = _state;
+                __instance.m_Info.List_Reservation.Clear();
+                GameMgr.Instance?._PoolMgr?.List_TileObject?.Remove(__instance);
+                GameMgr.Instance?._PoolMgr?.Pool_TileObject?.AddObjTf(__instance.gameObject);
+            }
+            __result = __instance!;
+            return false;
+        }
+
+        [HarmonyPatch(typeof(TileObject), nameof(TileObject.LifeTimeCheck), new Type[] { typeof(int) })]
+        [HarmonyPrefix]
+        public static bool TileObject_LifeTimeCheck_Prefix(ref bool __result)
+        {
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsClient) return true;
+            // Host is authoritative for floor item expiration and replicates destruction cleanly
+            __result = false;
+            return false;
+        }
+
+        [HarmonyPatch(typeof(TileObject), nameof(TileObject.DropObject), new Type[] { typeof(TileSt_Info), typeof(int), typeof(GameUnit) })]
+        [HarmonyPrefix]
+        public static void TileObject_DropObject_Prefix(out bool __state)
+        {
+            __state = _isInLocalDrop;
+            if (CoopNetManager.Instance != null && CoopNetManager.Instance.IsConnected && CoopNetManager.Instance.IsClient &&
+                !ItemSyncManager.IsApplyingRemoteItem)
+            {
+                _isInLocalDrop = true;
+            }
+        }
+
+        [HarmonyPatch(typeof(TileObject), nameof(TileObject.DropObject), new Type[] { typeof(TileSt_Info), typeof(int), typeof(GameUnit) })]
+        [HarmonyPostfix]
+        public static void TileObject_DropObject_Postfix(TileObject __instance, bool __state)
+        {
+            _isInLocalDrop = __state;
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsClient) return;
+            if (ItemSyncManager.IsApplyingRemoteItem || SaveTransferManager.IsWorldLoading) return;
+
+            // Host spawns the authoritative dropped TileObject and replicates it via TileObjectSpawn
+            if (__instance != null && __instance.m_Info != null &&
+                __instance.m_Info.m_Type != TileType.A_Citizen && __instance.m_Info.m_Type != TileType.GBot &&
+                __instance.gameObject != null && __instance.gameObject.activeSelf)
+            {
+                ItemSyncManager.IsApplyingRemoteItem = true;
+                try { __instance.ObjectDelete(); }
+                finally { ItemSyncManager.IsApplyingRemoteItem = false; }
+            }
         }
 
         [HarmonyPatch(typeof(TileObject), nameof(TileObject.ObjectInit), new Type[] { typeof(TileType), typeof(TObjState), typeof(Vector3), typeof(int), typeof(bool) })]
@@ -71,6 +146,9 @@ namespace RatopiaCoop.Patches
         {
             if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsClient) return;
             if (ItemSyncManager.IsApplyingRemoteItem || SaveTransferManager.IsWorldLoading) return;
+            if (_isInGatherFromBuilding || _isInStorageWithdrawUi) return;
+            if (__instance == null || __instance.m_Info == null || __instance.gameObject == null || !__instance.gameObject.activeInHierarchy) return;
+            if (__instance.m_Info.m_Type == TileType.A_Citizen || __instance.m_Info.m_Type == TileType.GBot) return;
 
             if (_unit != null && _unit == QueenSyncManager.Instance?.LocalCharacter)
             {
@@ -85,10 +163,17 @@ namespace RatopiaCoop.Patches
             if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsHost) return;
             if (ItemSyncManager.IsApplyingRemoteItem || SaveTransferManager.IsWorldLoading) return;
 
-            if (__instance != null && __instance.m_Info != null && __instance.m_Info.List_Reservation != null &&
-                __instance.m_Info.List_Reservation.Count > 0 && __instance.gameObject != null && __instance.gameObject.activeInHierarchy)
+            if (__instance != null && __instance.m_Info != null && __instance.m_Info.List_Reservation != null)
             {
-                ItemSyncManager.Instance?.SendTileObjectCountUpdate(__instance);
+                if (__instance.m_Info.List_Reservation.Count > 0 && __instance.gameObject != null && __instance.gameObject.activeInHierarchy)
+                {
+                    ItemSyncManager.Instance?.SendTileObjectCountUpdate(__instance);
+                }
+                else
+                {
+                    // Notify Client immediately when last unit is picked up instead of waiting 0.25s for MaplePickUpC
+                    ItemSyncManager.Instance?.SendTileObjectDestroy(__instance);
+                }
             }
         }
 
@@ -98,6 +183,7 @@ namespace RatopiaCoop.Patches
         {
             if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsClient) return;
             if (ItemSyncManager.IsApplyingRemoteItem || SaveTransferManager.IsWorldLoading) return;
+            if (__instance == null || __instance.gameObject == null || !__instance.gameObject.activeInHierarchy) return;
 
             if (_unit != null && _unit == QueenSyncManager.Instance?.LocalCharacter)
             {
@@ -267,24 +353,64 @@ namespace RatopiaCoop.Patches
             catch { }
         }
 
+        [HarmonyPatch(typeof(StorageUI), nameof(StorageUI.StorageUI_Open), new Type[] { typeof(Building), typeof(StorageUI.StorageMode), typeof(BuildMidUI) })]
+        [HarmonyPostfix]
+        public static void StorageUI_Open_Postfix(Building _building, StorageUI.StorageMode _mode)
+        {
+            IsStorageUiOpen = true;
+            OpenStorageBuilding = _building;
+        }
+
+        [HarmonyPatch(typeof(StorageUI), nameof(StorageUI.ExitBtn))]
+        [HarmonyPrefix]
+        public static void StorageUI_ExitBtn_Prefix()
+        {
+            IsStorageUiOpen = false;
+            OpenStorageBuilding = null;
+        }
+
         [HarmonyPatch(typeof(QueenCheckBox), nameof(QueenCheckBox.GatherFromBuilding), new Type[] { typeof(TileType), typeof(int) })]
         [HarmonyPrefix]
-        public static void QueenCheckBox_GatherFromBuilding_Prefix(QueenCheckBox __instance, TileType _type, int num)
+        public static void QueenCheckBox_GatherFromBuilding_Prefix(QueenCheckBox __instance, TileType _type, int num, out bool __state)
         {
+            __state = _isInGatherFromBuilding;
             if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsClient) return;
+
+            _isInGatherFromBuilding = true;
 
             var localQueen = QueenSyncManager.Instance?.LocalCharacter;
             if (localQueen != null && __instance == localQueen.m_CheckBox)
             {
-                Building? building = __instance.m_Building
+                var storageUi = GameMgr.Instance?._StorageUI;
+                Building? uiBuilding = null;
+                if (storageUi != null && (storageUi.enabled || _isStorageUiActiveOrWithdraw(storageUi)))
+                {
+                    uiBuilding = OpenStorageBuilding
+                        ?? Traverse.Create(storageUi).Field<BuildInfoUI>("m_StorageInfo").Value?.m_Building
+                        ?? storageUi.m_Building_Storage;
+                }
+
+                Building? building = uiBuilding
                     ?? GameMgr.Instance?._BuildMidUI?.m_StorageInfoUI?.m_Building
-                    ?? GameMgr.Instance?._StorageUI?.m_Building_Storage;
+                    ?? __instance.m_Building;
 
                 if (building != null)
                 {
                     ItemSyncManager.Instance?.SendRequestStorageWithdraw(building.m_ID, _type, num);
                 }
             }
+        }
+
+        private static bool _isStorageUiActiveOrWithdraw(StorageUI storageUi)
+        {
+            return _isInStorageWithdrawUi || (storageUi != null && IsStorageUiOpen);
+        }
+
+        [HarmonyPatch(typeof(QueenCheckBox), nameof(QueenCheckBox.GatherFromBuilding), new Type[] { typeof(TileType), typeof(int) })]
+        [HarmonyPostfix]
+        public static void QueenCheckBox_GatherFromBuilding_Postfix(bool __state)
+        {
+            _isInGatherFromBuilding = __state;
         }
 
         [HarmonyPatch(typeof(Building), nameof(Building.AddValue), new Type[] { typeof(TileType), typeof(TObjState), typeof(int), typeof(bool) })]
@@ -350,8 +476,8 @@ namespace RatopiaCoop.Patches
             if (localQueen == null) return;
 
             Dictionary<TileType, int> after = CountGatheringByType(localQueen.List_Gathering);
-            int bx = Mathf.RoundToInt(__state.bp.Pos_Tile.x);
-            int by = Mathf.RoundToInt(__state.bp.Pos_Tile.y);
+            float bx = __state.bp.Pos_Tile.x;
+            float by = __state.bp.Pos_Tile.y;
             foreach (var kv in __state.before)
             {
                 after.TryGetValue(kv.Key, out int rem);
@@ -359,6 +485,41 @@ namespace RatopiaCoop.Patches
                 if (diff > 0)
                 {
                     WorldSyncManager.Instance?.SendRequestBlueprintDeposit(bx, by, kv.Key, diff);
+                }
+            }
+        }
+
+        [HarmonyPatch(typeof(QueenCheckBox), nameof(QueenCheckBox.BP_PlantInteraction))]
+        [HarmonyPrefix]
+        public static void QueenCheckBox_BP_PlantInteraction_Prefix(QueenCheckBox __instance, out (BP_Plant? bp, Dictionary<TileType, int>? before) __state)
+        {
+            __state = (null, null);
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsClient) return;
+
+            var localQueen = QueenSyncManager.Instance?.LocalCharacter;
+            if (localQueen != null && __instance == localQueen.m_CheckBox && __instance.m_BP_Plant != null)
+            {
+                __state = (__instance.m_BP_Plant, CountGatheringByType(localQueen.List_Gathering));
+            }
+        }
+
+        [HarmonyPatch(typeof(QueenCheckBox), nameof(QueenCheckBox.BP_PlantInteraction))]
+        [HarmonyPostfix]
+        public static void QueenCheckBox_BP_PlantInteraction_Postfix((BP_Plant? bp, Dictionary<TileType, int>? before) __state)
+        {
+            if (__state.bp == null || __state.before == null) return;
+            var localQueen = QueenSyncManager.Instance?.LocalCharacter;
+            if (localQueen == null) return;
+
+            Dictionary<TileType, int> after = CountGatheringByType(localQueen.List_Gathering);
+            Vector2 pos = __state.bp.Pos_Tile;
+            foreach (var kv in __state.before)
+            {
+                after.TryGetValue(kv.Key, out int rem);
+                int diff = kv.Value - rem;
+                if (diff > 0)
+                {
+                    WorldSyncManager.Instance?.SendPlantBlueprintDeposit(pos, kv.Key, diff);
                 }
             }
         }

@@ -76,5 +76,17 @@ namespace RatopiaCoop.Patches
             int y = Mathf.RoundToInt(pos.y);
             WorldSyncManager.Instance?.SendTileCreated((int)_type, x, y, _att_num);
         }
+
+        [HarmonyPatch(typeof(C_Tile), nameof(C_Tile.HP_Update), new System.Type[] { typeof(float) })]
+        [HarmonyPostfix]
+        public static void C_Tile_HP_Update_Postfix(C_Tile __instance)
+        {
+            if (__instance == null || __instance.IsDestroy) return;
+            if (__instance.m_HP <= 0f) return; // DestroyTile handles full destruction immediately
+            if (!IsSafeToSyncTiles()) return;
+            if (!CoopNetManager.Instance.IsHost) return;
+
+            WorldSyncManager.Instance?.SendTileHpUpdate(__instance.m_X, __instance.m_Y, __instance.IsWater, __instance.m_HP, __instance.m_MaxHP);
+        }
     }
 }

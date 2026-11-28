@@ -75,9 +75,10 @@ ratopia-coop/
 ## 📥 Установка и запуск (как играть в Ратопию по сети)
 
 ### Варианты архивов в [Releases](https://github.com/kortonit-coop-dev/ratopia-coop/releases)
-1. **`RatopiaCoop-Full-BepInEx-v1.0.0.zip`** — **полная готовая сборка с BepInEx 5.4.23.2 (x64)** для чистой игры (распаковать в корень папки `Ratopia/`).
-2. **`RatopiaCoop-Plugins-Only-v1.0.0.zip`** — **только оба плагина** (`RatopiaUnitBrain` + `RatopiaCoop` + `LiteNetLib`), если BepInEx 5.4.x уже установлен.
-3. **`RatopiaUnitBrain-Only-v1.0.0.zip`** — **только `RatopiaUnitBrain`** (standalone API/зависимость для разработчиков).
+1. **`RatopiaCoop-Installer-v1.0.5.exe`** — **автоматический установщик для Windows** (сам находит папку `Ratopia/` и распаковывает полную сборку).
+2. **`RatopiaCoop-Full-BepInEx-v1.0.5.zip`** — **полная готовая сборка с BepInEx 5.4.23.2 (x64)** для чистой игры (распаковать в корень папки `Ratopia/`).
+3. **`RatopiaCoop-Plugins-Only-v1.0.5.zip`** — **только оба плагина** (`RatopiaUnitBrain` + `RatopiaCoop` + `LiteNetLib`), если BepInEx 5.4.x уже установлен.
+4. **`RatopiaUnitBrain-Only-v1.0.5.zip`** — **только `RatopiaUnitBrain`** (standalone API/зависимость для разработчиков).
 
 ### Пошаговая инструкция
 1. Скачайте подходящий архив со страницы [Releases](https://github.com/kortonit-coop-dev/ratopia-coop/releases/latest) (новичкам подойдёт **Full-BepInEx**).
@@ -127,7 +128,7 @@ dotnet build coop/RatopiaCoop.csproj
 - **Two Independent Queens:** Host (`777`) & Client (`778`) with separate inventories, combat, Spine animations, and ally revive.
 - **Host-Authoritative Simulation (`RatopiaUnitBrain`):** Citizens, guards, drones, enemies, and wildlife run AI on the host and interpolate smoothly on the client (`RemotePuppet` mode).
 - **Shared Colony:** Synchronized tile mining, `MiningBox` selection orders, blueprints, buildings, ground items, storages, treasury, tech research tree, game clock/pause, live save transfer, and in-game chat (`F9` lobby, `Enter` chat).
-- **Download:** Grab `RatopiaCoop-Full-BepInEx-v1.0.0.zip` (clean game install) or `RatopiaCoop-Plugins-Only-v1.0.0.zip` (existing BepInEx 5.4.x) from [Releases](https://github.com/kortonit-coop-dev/ratopia-coop/releases/latest) and extract into your `Ratopia/` folder.
+- **Download:** Grab `RatopiaCoop-Full-BepInEx-v1.0.5.zip` (clean game install) or `RatopiaCoop-Plugins-Only-v1.0.5.zip` (existing BepInEx 5.4.x) from [Releases](https://github.com/kortonit-coop-dev/ratopia-coop/releases/latest) and extract into your `Ratopia/` folder.
 
 ---
 

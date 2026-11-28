@@ -9,7 +9,10 @@ using LiteNetLib.Utils;
 using RatopiaCoop.Network;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Utility;
+using Utility.Data;
 using Utility.IO;
+using Utility.UI;
 
 namespace RatopiaCoop.Sync
 {
@@ -30,6 +33,67 @@ namespace RatopiaCoop.Sync
         private int _chunksReceived;
 
         /// <summary>
+        /// Pinned host world data on the Client until LoadingSceneMgr and LoadMgr.LoadSettingC finish.
+        /// Prevents concurrent main-menu Resume/Load callbacks from overwriting SaveLoadAsyncData.
+        /// </summary>
+        public static D_Data? PendingClientWorldData { get; private set; }
+        public static string? PendingClientWorldPath { get; private set; }
+        public static bool IsApplyingCoopSceneTransition { get; private set; }
+
+        public static bool HasPendingClientLoad =>
+            PendingClientWorldData != null &&
+            CoopNetManager.Instance != null &&
+            CoopNetManager.Instance.IsClientActive;
+
+        public static void ClearPendingClientWorld()
+        {
+            PendingClientWorldData = null;
+            PendingClientWorldPath = null;
+            IsApplyingCoopSceneTransition = false;
+        }
+
+        /// <summary>
+        /// Ensures SaveLoadAsyncData, PlayDataMgr, and LoadingSceneMgr stay pinned to the downloaded host world.
+        /// </summary>
+        public static bool EnforcePendingClientWorldData(string source)
+        {
+            if (!HasPendingClientLoad || PendingClientWorldData == null) return false;
+            bool fixedMismatch = false;
+
+            if (!ReferenceEquals(SaveLoadAsyncData.Data, PendingClientWorldData) || SaveLoadAsyncData.IsFileLoading)
+            {
+                Plugin.Log.LogWarning($"[SaveTransferManager] Re-enforcing host world in SaveLoadAsyncData at {source} (IsFileLoading={SaveLoadAsyncData.IsFileLoading}, sameRef={ReferenceEquals(SaveLoadAsyncData.Data, PendingClientWorldData)}).");
+                SaveLoadAsyncData.Data = PendingClientWorldData;
+                SaveLoadAsyncData.FilePath = PendingClientWorldPath ?? string.Empty;
+                SaveLoadAsyncData.Message = SaveLoadConfigure.TypeSaveLoadResult.Success;
+                SaveLoadAsyncData.IsFileLoading = false;
+                fixedMismatch = true;
+            }
+
+            if (PlayDataMgr.Instance != null &&
+                (!ReferenceEquals(PlayDataMgr.Instance.m_GameData, PendingClientWorldData) ||
+                 !PlayDataMgr.Instance.IsLoadGame ||
+                 PlayDataMgr.Instance.IsSpaceOut))
+            {
+                Plugin.Log.LogWarning($"[SaveTransferManager] Re-enforcing host world in PlayDataMgr at {source} (IsLoadGame={PlayDataMgr.Instance.IsLoadGame}, IsSpaceOut={PlayDataMgr.Instance.IsSpaceOut}, sameRef={ReferenceEquals(PlayDataMgr.Instance.m_GameData, PendingClientWorldData)}).");
+                PlayDataMgr.Instance.LoadData(PendingClientWorldData);
+                PlayDataMgr.Instance.m_SO_Data = null;
+                PlayDataMgr.Instance.IsSpaceOut = false;
+                PlayDataMgr.Instance.IsLoadGame = true;
+                fixedMismatch = true;
+            }
+
+            if (LoadingSceneMgr.IsNewGame || LoadingSceneMgr.Str_NextScene != SceneConfigure.SCENE_GAME)
+            {
+                LoadingSceneMgr.Str_NextScene = SceneConfigure.SCENE_GAME;
+                LoadingSceneMgr.IsNewGame = false;
+                fixedMismatch = true;
+            }
+
+            return fixedMismatch;
+        }
+
+        /// <summary>
         /// Universal guard for all world/tile/blueprint/research hooks:
         /// returns true whenever save transfer, map generation, or save loading is in progress.
         /// </summary>
@@ -38,6 +102,8 @@ namespace RatopiaCoop.Sync
             get
             {
                 if (Instance != null && Instance.IsTransferring)
+                    return true;
+                if (HasPendingClientLoad)
                     return true;
                 if (PlayDataMgr.Instance != null && PlayDataMgr.Instance.IsLoadGame)
                     return true;
@@ -84,6 +150,7 @@ namespace RatopiaCoop.Sync
         {
             IsTransferring = false;
             IsSuppressingPauseSync = false;
+            ClearPendingClientWorld();
             // Ensure world is unpaused on Host if client disconnects during transfer
             if (GameMgr.Instance != null && GameMgr.Instance._SysMgr != null)
             {
@@ -215,6 +282,7 @@ namespace RatopiaCoop.Sync
             {
                 case PacketType.SaveTransferStart:
                 {
+                    ClearPendingClientWorld();
                     _totalBytesExpected = reader.GetInt();
                     _totalChunksExpected = reader.GetInt();
                     _clientReceiveBuffer = new byte[_totalBytesExpected];
@@ -299,7 +367,21 @@ namespace RatopiaCoop.Sync
                 if (loadedData != null)
                 {
                     File.WriteAllBytes(tempZipPath, saveBytes);
-                    Plugin.Log.LogInfo("[SaveTransferManager] D_Data deserialized from memory! Loading world into PlayDataMgr...");
+                    PendingClientWorldData = loadedData;
+                    PendingClientWorldPath = tempZipPath;
+
+                    Plugin.Log.LogInfo($"[SaveTransferManager] D_Data deserialized from memory (File='{loadedData.FileName}', Dir='{loadedData.DirectoryName}', Day={loadedData.SystemData?.m_Day ?? -1})! Loading host world into PlayDataMgr...");
+
+                    // Cancel any in-flight TitleUI/LoadMenuUI fades or background map coroutines before preparing host world state
+                    MEC.Timing.KillCoroutines();
+                    FadeMgr.Hide();
+
+                    PlayDataMgr.Instance.BeforeLoad();
+                    SaveLoadAsyncData.Dispose();
+                    LedgerSheetManager.Dispose();
+                    ActionLogManager.Dispose();
+                    IndividualStatisticsManager.Dispose();
+                    PlayTimeCounter.Deactivate();
 
                     SaveLoadAsyncData.Data = loadedData;
                     SaveLoadAsyncData.FilePath = tempZipPath;
@@ -307,13 +389,24 @@ namespace RatopiaCoop.Sync
                     SaveLoadAsyncData.IsFileLoading = false;
 
                     PlayDataMgr.Instance.LoadData(loadedData);
+                    PlayDataMgr.Instance.LastDataFilePath = tempZipPath;
+                    PlayDataMgr.Instance.m_SO_Data = null;
+                    PlayDataMgr.Instance.IsSpaceOut = false;
                     PlayDataMgr.Instance.IsLoadGame = true;
 
-                    // Kill leftover MEC scene coroutines (MapObj/FishHole MakeSpawnC, etc.) before reloading GameScene
-                    MEC.Timing.KillCoroutines();
+                    int hostGameTime = loadedData.SystemData != null ? loadedData.SystemData.m_Day : 0;
+                    Plugin.Log.LogInfo($"[SaveTransferManager] Transitioning to LoadingScene -> GameScene for Host world (Seed='{PlayDataMgr.Instance.StartSettingsData.Seed}', IsLoadGame={PlayDataMgr.Instance.IsLoadGame}, GameTime={hostGameTime}).");
 
-                    // Trigger loading screen into GameScene
-                    LoadingSceneMgr.LoadScene(SceneConfigure.SCENE_GAME);
+                    // Trigger loading screen into GameScene under transition lock
+                    IsApplyingCoopSceneTransition = true;
+                    try
+                    {
+                        LoadingSceneMgr.LoadScene(SceneConfigure.SCENE_GAME, hostGameTime, false);
+                    }
+                    finally
+                    {
+                        IsApplyingCoopSceneTransition = false;
+                    }
 
                     // Wait until scene is loaded and GameMgr + LoadMgr.LoadSettingC are completely ready, then notify host
                     StartCoroutine(WaitForSceneLoadedAndNotify(tempZipPath));
@@ -321,12 +414,14 @@ namespace RatopiaCoop.Sync
                 else
                 {
                     Plugin.Log.LogError("[SaveTransferManager] Failed to deserialize .dat from downloaded save bytes.");
+                    ClearPendingClientWorld();
                     IsTransferring = false;
                 }
             }
             catch (Exception ex)
             {
                 Plugin.Log.LogError($"[SaveTransferManager] Error applying downloaded save: {ex}");
+                ClearPendingClientWorld();
                 IsTransferring = false;
             }
         }
@@ -394,6 +489,7 @@ namespace RatopiaCoop.Sync
             QueenSyncManager.Instance?.SetupQueens();
             CitizenSyncManager.Instance?.MarkExistingUnitsAsPuppets();
 
+            ClearPendingClientWorld();
             IsTransferring = false; // Loading fully complete on client
             NetDataWriter readyWriter = new NetDataWriter();
             CoopNetManager.Instance.SendPacket(PacketType.ClientReady, readyWriter, DeliveryMethod.ReliableOrdered);

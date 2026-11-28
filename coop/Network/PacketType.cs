@@ -45,6 +45,10 @@ namespace RatopiaCoop.Network
         WorldObjectBatchSync = 0x49,  // Full periodic snapshot of all world objects
         RequestHarvestWorldObj = 0x4A,// Client Queen interaction -> Host authoritatively harvests
         RequestBlueprintDeposit = 0x4B,// Client Queen material delivery to blueprint -> Host applies
+        TileHpUpdate = 0x4C,          // Host tile HP / crack progress -> Client visuals & sync
+        RequestBlueprintWork = 0x4D,  // Client manual construction work -> Host advances/completes blueprint
+        BlueprintProgressSync = 0x4E, // Host blueprint material slots / state / progress -> Client
+        PlantBlueprintSync = 0x4F,    // Plant blueprint (BP_Plant) placement, deposit, work & completion sync
 
         // Simulation & Economy Sync (0x50 - 0x5F)
         TimeSync = 0x50,
@@ -68,7 +72,8 @@ namespace RatopiaCoop.Network
         RequestStorageWithdraw = 0x76,
         BuildingInventorySync = 0x77,
         TileObjectCountUpdate = 0x78,
-        RequestStorageEject = 0x79
+        RequestStorageEject = 0x79,
+        ClientHandSync = 0x7A
     }
 
     public enum PlayerActionType : byte

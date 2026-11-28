@@ -4,7 +4,7 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>RatopiaCoop</AssemblyName>
     <Product>RatopiaCoop</Product>
-    <Version>1.0.0</Version>
+    <Version>1.0.5</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
@@ -65,6 +65,10 @@
     </Reference>
     <Reference Include="Unity.TextMeshPro">
       <HintPath>..\Ratopia\Ratopia_Data\Managed\Unity.TextMeshPro.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="gpm_ui">
+      <HintPath>..\Ratopia\Ratopia_Data\Managed\gpm_ui.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="spine-unity">

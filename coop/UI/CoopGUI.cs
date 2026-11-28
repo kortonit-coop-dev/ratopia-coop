@@ -51,11 +51,45 @@ namespace RatopiaCoop.UI
         // Debounce to prevent rapid double-toggling
         private float _lastToggleTime = 0f;
         private const float DEBOUNCE_COOLDOWN = 0.35f;
+        private float _lastPointerInteractTime = -10f;
 
         private string _targetIp = "127.0.0.1";
         private string _targetPort = "7777";
         private Rect _windowRect = new Rect(25, 52, 400, 560);
         private Vector2 _scrollPosition = Vector2.zero;
+
+        private Rect GetBannerRect()
+        {
+            float barWidth = Mathf.Min(Screen.width - 20, 560f);
+            return new Rect(10, 8, barWidth, 34);
+        }
+
+        private Rect GetWindowBoundsRect()
+        {
+            return new Rect(_windowRect.x - 2, _windowRect.y - 2, _windowRect.width + 4, _windowRect.height + 4);
+        }
+
+        /// <summary>
+        /// Returns true while the cursor hovers or recently clicked inside the visible Co-op UI
+        /// so IMGUI interactions do not pass through to underlying Unity uGUI menus.
+        /// </summary>
+        public bool IsPointerOverGUI()
+        {
+            if (Time.unscaledTime - _lastPointerInteractTime < 0.15f)
+                return true;
+
+            Vector2 screenPos = Mouse.current != null
+                ? Mouse.current.position.ReadValue()
+                : (Vector2)UnityEngine.Input.mousePosition;
+            Vector2 guiPos = new Vector2(screenPos.x, Screen.height - screenPos.y);
+
+            if (_showTopBanner && GetBannerRect().Contains(guiPos))
+                return true;
+            if (_showGUI && GetWindowBoundsRect().Contains(guiPos))
+                return true;
+
+            return false;
+        }
 
         // Solid textures for guaranteed visibility over any Unity canvas
         private static Texture2D? _solidDarkBg;
@@ -375,8 +409,17 @@ namespace RatopiaCoop.UI
                 Plugin.Print($"[CoopGUI] OnGUI is rendering normally! Resolution: {Screen.width}x{Screen.height}");
             }
 
-            // 0. IMGUI Event KeyDown Check
+            // 0. IMGUI Event KeyDown & Pointer Interaction Capture
             Event e = Event.current;
+            if (e != null && e.isMouse)
+            {
+                bool hitBanner = _showTopBanner && GetBannerRect().Contains(e.mousePosition);
+                bool hitWindow = _showGUI && GetWindowBoundsRect().Contains(e.mousePosition);
+                if (hitBanner || hitWindow || _isDragging)
+                {
+                    _lastPointerInteractTime = Time.unscaledTime;
+                }
+            }
             if (e != null && e.type == EventType.KeyDown)
             {
                 if (e.keyCode == KeyCode.F10 || e.keyCode == KeyCode.F11 || e.keyCode == KeyCode.F9 ||
@@ -390,8 +433,8 @@ namespace RatopiaCoop.UI
             // 1. Persistent Top Floating Header / Button Bar (hideable via its [Hide] button or menu toggle)
             if (_showTopBanner)
             {
-                float barWidth = Mathf.Min(Screen.width - 20, 560f);
-                Rect headerRect = new Rect(10, 8, barWidth, 34);
+                Rect headerRect = GetBannerRect();
+                float barWidth = headerRect.width;
 
                 GUI.DrawTexture(headerRect, _solidTopBannerBg!);
                 DrawRectOutline(headerRect, 1, new Color(0f, 0.85f, 1f, 0.8f));

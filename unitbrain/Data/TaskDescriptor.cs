@@ -31,10 +31,12 @@ namespace RatopiaUnitBrain.Data
         public string ParamString { get; set; } = string.Empty;
         public float Duration { get; set; }
         public TileType ItemType { get; set; } = TileType.None;
+        public bool IsTileTarget { get; set; }
+        public float InitialProgress { get; set; }
 
         public TaskDescriptor() { }
 
-        public TaskDescriptor(UnitTaskType taskType, Vector2 targetPos, int targetEntityId = 0, string param = "", float duration = 0f, TileType itemType = TileType.None)
+        public TaskDescriptor(UnitTaskType taskType, Vector2 targetPos, int targetEntityId = 0, string param = "", float duration = 0f, TileType itemType = TileType.None, bool isTileTarget = false, float initialProgress = 0f)
         {
             TaskType = taskType;
             TargetPos = targetPos;
@@ -42,6 +44,8 @@ namespace RatopiaUnitBrain.Data
             ParamString = param;
             Duration = duration;
             ItemType = itemType;
+            IsTileTarget = isTileTarget;
+            InitialProgress = initialProgress;
         }
 
         public override string ToString()

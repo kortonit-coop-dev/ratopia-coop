@@ -13,7 +13,7 @@ namespace RatopiaUnitBrain
     {
         public const string PLUGIN_GUID = "com.ratopiacoop.unitbrain";
         public const string PLUGIN_NAME = "Ratopia Unit Brain API";
-        public const string PLUGIN_VERSION = "1.0.0";
+        public const string PLUGIN_VERSION = "1.0.5";
 
         public static UnitBrainPlugin Instance { get; private set; } = null!;
         public static BepInEx.Logging.ManualLogSource Log => Instance.Logger;

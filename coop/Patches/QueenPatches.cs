@@ -228,6 +228,19 @@ namespace RatopiaCoop.Patches
                 return false;
             }
 
+            // In co-op: Keep local character stationary while THIS player is navigating ConstructUI, MiningBox, Order Wheel, or UI menus
+            if (QueenSyncManager.Instance != null && __instance == QueenSyncManager.Instance.LocalCharacter)
+            {
+                string? actionMap = CasselGames.Input.InputMgr.Instance != null ? CasselGames.Input.InputMgr.Instance.NowActionMapKey : null;
+                bool isUiOrOrderMap = actionMap == CasselGames.Input.InputMgrConfigure.INPUT_ACTIONMAP_ORDER ||
+                                      actionMap == CasselGames.Input.InputMgrConfigure.INPUT_ACTIONMAP_UI ||
+                                      actionMap == CasselGames.Input.InputMgrConfigure.INPUT_ACTIONMAP_RING;
+                if (__instance.m_CommandMode || isUiOrOrderMap)
+                {
+                    return false;
+                }
+            }
+
             return true;
         }
 

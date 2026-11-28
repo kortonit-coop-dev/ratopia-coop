@@ -18,6 +18,8 @@ namespace RatopiaUnitBrain.Data
         public int CarriedCount;
         public bool IsWorking;
         public float WorkProgress;
+        public bool IsTileTarget;
+        public Vector2 WorkTargetPos;
         public bool IsInBuilding;
 
         public static UnitBrainSnapshot FromUnit(GameUnit unit)
@@ -39,6 +41,8 @@ namespace RatopiaUnitBrain.Data
                 CarriedCount = 0,
                 IsWorking = false,
                 WorkProgress = 0f,
+                IsTileTarget = false,
+                WorkTargetPos = Vector2.zero,
                 IsInBuilding = false
             };
 
@@ -67,6 +71,16 @@ namespace RatopiaUnitBrain.Data
                 if (unit.m_WorkTimeGauge.m_Gauge != null)
                 {
                     snapshot.WorkProgress = unit.m_WorkTimeGauge.m_Gauge.size.x;
+                }
+                var gaugeParent = unit.m_WorkTimeGauge.transform.parent;
+                if (gaugeParent != null && gaugeParent != unit.Tf)
+                {
+                    var tile = gaugeParent.GetComponent<C_Tile>();
+                    if (tile != null)
+                    {
+                        snapshot.IsTileTarget = true;
+                        snapshot.WorkTargetPos = tile.GetPos();
+                    }
                 }
             }
 

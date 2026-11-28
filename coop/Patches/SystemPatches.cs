@@ -14,11 +14,43 @@ namespace RatopiaCoop.Patches
         private static bool _isApplyingNetworkInvasion;
 
         #region Game Pause & Speed Synchronization
+        private static bool ShouldSuppressGameplayPause()
+        {
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected)
+                return false;
+            if (SaveTransferManager.IsWorldLoading)
+                return false;
+            if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name != "GameScene")
+                return false;
+
+            var tileMgr = GameMgr.Instance?._TileMgr;
+            if (tileMgr == null || tileMgr.m_MapLoading || tileMgr.m_GameLoading)
+                return false;
+
+            if (QueenSyncManager.Instance != null && QueenSyncManager.Instance.IsBothDown())
+                return false;
+
+            return true;
+        }
+
+        [HarmonyPatch(typeof(SystemMgr), "SystemPause")]
+        [HarmonyPrefix]
+        public static bool SystemPause_Prefix(bool pause)
+        {
+            // Keep Co-op world simulation unpaused when either player opens Build, MiningBox, Research, or Command menus
+            if (pause && !_isApplyingNetworkPause && ShouldSuppressGameplayPause())
+            {
+                return false;
+            }
+            return true;
+        }
+
         [HarmonyPatch(typeof(SystemMgr), "SystemPause")]
         [HarmonyPostfix]
         public static void SystemPause_Postfix(bool pause)
         {
             if (_isApplyingNetworkPause) return;
+            if (pause && ShouldSuppressGameplayPause()) return;
             if (SaveTransferManager.Instance != null && (SaveTransferManager.Instance.IsSuppressingPauseSync || SaveTransferManager.IsWorldLoading))
                 return;
 
@@ -52,6 +84,11 @@ namespace RatopiaCoop.Patches
         {
             if (GameMgr.Instance == null || GameMgr.Instance._SysMgr == null) return;
             var sys = GameMgr.Instance._SysMgr;
+
+            if (pause && ShouldSuppressGameplayPause())
+            {
+                pause = false;
+            }
 
             try
             {
@@ -276,6 +313,15 @@ namespace RatopiaCoop.Patches
         #endregion
 
         #region Immigration, Citizen Caves & Host-Authoritative Spawners
+        private static bool IsCitizenEntranceBuilding(Building? building)
+        {
+            return building != null && building.m_Info != null &&
+                   (building.m_Info.Name == BuildingName.CitizenCave ||
+                    building.m_Info.Ability == BuildAbility.CitizenCave ||
+                    building.m_Info.Name == BuildingName.Almshouse ||
+                    building.m_Info.Ability == BuildAbility.Almshouse);
+        }
+
         [HarmonyPatch(typeof(Building_CitizenCave), "MakeCitzenDirect")]
         [HarmonyPrefix]
         public static bool Building_CitizenCave_MakeCitzenDirect_Prefix()
@@ -283,6 +329,120 @@ namespace RatopiaCoop.Patches
             // Immigration animations/generation run authoritatively on the host
             if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected) return true;
             if (CoopNetManager.Instance.IsClient) return false;
+            return true;
+        }
+
+        [HarmonyPatch(typeof(BuildMid_QueenSlot), nameof(BuildMid_QueenSlot.InfoUpdate))]
+        [HarmonyPostfix]
+        public static void BuildMid_QueenSlot_InfoUpdate_Postfix(BuildMid_QueenSlot __instance)
+        {
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsClient) return;
+            if (__instance == null) return;
+
+            try
+            {
+                var trav = Traverse.Create(__instance);
+                var building = trav.Field<Building>("m_Building").Value;
+                if (!IsCitizenEntranceBuilding(building)) return;
+
+                var txt = trav.Field<TMPro.TextMeshProUGUI>("Txt_Script").Value;
+                if (txt != null && !txt.text.Contains("[Host Only]"))
+                {
+                    txt.text = $"{txt.text} [Host Only]";
+                }
+            }
+            catch { }
+        }
+
+        [HarmonyPatch(typeof(BuildMid_QueenSlot), nameof(BuildMid_QueenSlot.SlotAction), new System.Type[] { typeof(Building), typeof(BuildMidUI) })]
+        [HarmonyPrefix]
+        public static bool BuildMid_QueenSlot_SlotAction_Prefix(Building _building, ref int __result)
+        {
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsClient) return true;
+            if (!IsCitizenEntranceBuilding(_building)) return true;
+
+            try
+            {
+                CasselGames.Audio.AudioController.PlayUIOneShot("SFX_UI_Cancel");
+                GameMgr.Instance?._CenterAlarmUI?.CenterAlarmCustomSet("Only Host can use the City Entrance.", Color.red);
+            }
+            catch { }
+
+            __result = 2; // Keep BuildMidUI open without disabling it
+            return false;
+        }
+
+        [HarmonyPatch(typeof(CitizenCaveUI), nameof(CitizenCaveUI.OpenCCUI), new System.Type[] { typeof(bool) })]
+        [HarmonyPrefix]
+        public static bool CitizenCaveUI_OpenCCUI_Prefix(bool _isquest)
+        {
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsClient) return true;
+
+            // Allow Diplomatic Mail (_isquest) and Dungeon Reward (IsSpaceOut), block City Entrance / Almshouse recruitment
+            if (!_isquest && (PlayDataMgr.Instance == null || !PlayDataMgr.Instance.IsSpaceOut))
+            {
+                try
+                {
+                    CasselGames.Audio.AudioController.PlayUIOneShot("SFX_UI_Cancel");
+                    GameMgr.Instance?._CenterAlarmUI?.CenterAlarmCustomSet("Only Host can use the City Entrance.", Color.red);
+                }
+                catch { }
+                return false;
+            }
+            return true;
+        }
+
+        [HarmonyPatch(typeof(CitizenCaveUI), nameof(CitizenCaveUI.MakeCitizenList))]
+        [HarmonyPrefix]
+        public static bool CitizenCaveUI_MakeCitizenList_Prefix()
+        {
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected) return true;
+            if (CoopNetManager.Instance.IsClient) return false;
+            return true;
+        }
+
+        [HarmonyPatch(typeof(CitizenCaveUI), nameof(CitizenCaveUI.RecruitBtn))]
+        [HarmonyPrefix]
+        public static bool CitizenCaveUI_RecruitBtn_Prefix(CitizenCaveUI __instance)
+        {
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsClient) return true;
+            if (PlayDataMgr.Instance != null && PlayDataMgr.Instance.IsSpaceOut) return true;
+
+            if (__instance != null && __instance.Obj_Main != null && __instance.Obj_Main.activeSelf)
+            {
+                __instance.Off_CCUI();
+            }
+            return false;
+        }
+
+        [HarmonyPatch(typeof(CitizenCaveUI), "Refuse_Citizen")]
+        [HarmonyPrefix]
+        public static bool CitizenCaveUI_Refuse_Citizen_Prefix(CitizenCaveUI __instance)
+        {
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsClient) return true;
+
+            if (__instance != null && __instance.Obj_Main != null && __instance.Obj_Main.activeSelf)
+            {
+                __instance.Off_CCUI();
+            }
+            return false;
+        }
+
+        [HarmonyPatch(typeof(T_UnitMgr), nameof(T_UnitMgr.MakeCtiizen_ByCC), new System.Type[] { typeof(Vector2), typeof(float), typeof(CC_Group) })]
+        [HarmonyPrefix]
+        public static bool TUnitMgr_MakeCtiizen_ByCC_Prefix()
+        {
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected) return true;
+            if (CoopNetManager.Instance.IsClient) return CitizenSyncManager.IsApplyingRemoteSpawn || SaveTransferManager.IsWorldLoading;
+            return true;
+        }
+
+        [HarmonyPatch(typeof(T_Citizen), nameof(T_Citizen.MakeCtizen_ByCC), new System.Type[] { typeof(Vector2), typeof(CCMake_Info) })]
+        [HarmonyPrefix]
+        public static bool TCitizen_MakeCtizen_ByCC_Prefix()
+        {
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected) return true;
+            if (CoopNetManager.Instance.IsClient) return CitizenSyncManager.IsApplyingRemoteSpawn || SaveTransferManager.IsWorldLoading;
             return true;
         }
 

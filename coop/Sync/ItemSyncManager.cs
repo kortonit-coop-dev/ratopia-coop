@@ -1,9 +1,13 @@
 using System;
 using System.Collections.Generic;
+using Gpm.Ui;
+using HarmonyLib;
 using LiteNetLib;
 using LiteNetLib.Utils;
 using RatopiaCoop.Network;
+using RatopiaCoop.Patches;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace RatopiaCoop.Sync
 {
@@ -19,7 +23,7 @@ namespace RatopiaCoop.Sync
         public static bool IsApplyingRemoteStorage { get; set; }
 
         private float _lastTileObjectBatchTime;
-        private const float TileObjectBatchInterval = 4.0f;
+        private const float TileObjectBatchInterval = 2.0f;
 
         private float _lastStorageBatchTime;
         private const float StorageBatchInterval = 2.5f;
@@ -29,6 +33,8 @@ namespace RatopiaCoop.Sync
         private ushort _groundBatchSeq;
         private ushort _activeClientBatchSeq;
         private readonly HashSet<int> _clientBatchIds = new HashSet<int>();
+        private readonly HashSet<int> _sentDestroyIds = new HashSet<int>();
+        private readonly Queue<int> _sentDestroyQueue = new Queue<int>();
 
         private void Awake()
         {
@@ -91,8 +97,14 @@ namespace RatopiaCoop.Sync
         public void SendFullReconciliation()
         {
             if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsHost) return;
+            _sentDestroyIds.Clear();
+            _sentDestroyQueue.Clear();
             BroadcastGroundItemsBatch();
             BroadcastAllStorageBuildings();
+            if (QueenSyncManager.Instance?.Player2Worker != null)
+            {
+                SendClientHandSync(QueenSyncManager.Instance.Player2Worker);
+            }
         }
 
         // =========================================================================
@@ -133,6 +145,9 @@ namespace RatopiaCoop.Sync
                 case PacketType.BuildingInventorySync:
                     HandleBuildingInventorySync(reader);
                     break;
+                case PacketType.ClientHandSync:
+                    HandleClientHandSync(reader);
+                    break;
             }
         }
 
@@ -144,6 +159,9 @@ namespace RatopiaCoop.Sync
         {
             if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsHost) return;
             if (to == null || to.m_Info == null || to.Tf == null) return;
+            if (to.m_Info.m_Type == TileType.A_Citizen || to.m_Info.m_Type == TileType.GBot) return;
+
+            _sentDestroyIds.Remove(to.m_ID);
 
             NetDataWriter writer = new NetDataWriter();
             writer.Put(to.m_ID);
@@ -159,6 +177,15 @@ namespace RatopiaCoop.Sync
         {
             if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsHost) return;
             if (to == null || to.m_Info == null || to.Tf == null) return;
+            if (to.m_Info.m_Type == TileType.A_Citizen || to.m_Info.m_Type == TileType.GBot) return;
+
+            if (!_sentDestroyIds.Add(to.m_ID)) return;
+            _sentDestroyQueue.Enqueue(to.m_ID);
+            if (_sentDestroyQueue.Count > 1024)
+            {
+                int old = _sentDestroyQueue.Dequeue();
+                _sentDestroyIds.Remove(old);
+            }
 
             NetDataWriter writer = new NetDataWriter();
             writer.Put(to.m_ID);
@@ -258,15 +285,17 @@ namespace RatopiaCoop.Sync
                 if (existing != null)
                 {
                     existing.m_ID = id;
+                    EnsureActiveGroundItemVisuals(existing, posX, posY);
                     if (count > 0) SetTileObjectCount(existing, count);
                     return;
                 }
 
-                if (GameMgr.Instance?._PoolMgr?.Pool_TileObject != null)
+                if (GameMgr.Instance?._PoolMgr?.Pool_TileObject != null && count > 0)
                 {
-                    TileObject to = GameMgr.Instance._PoolMgr.Pool_TileObject.GetNextObj(_act: false).GetComponent<TileObject>();
+                    TileObject to = GameMgr.Instance._PoolMgr.Pool_TileObject.GetNextObj().GetComponent<TileObject>();
                     to.ObjectInit(type, TObjState.Basic, new Vector3(posX, posY, 0f), count, _fadeskip: true);
                     to.m_ID = id;
+                    ApplyExactSyncedTransform(to, posX, posY);
                 }
             }
             catch (Exception ex)
@@ -362,14 +391,13 @@ namespace RatopiaCoop.Sync
                     }
                     else
                     {
-                        if (target.m_Info != null && target.m_Info.List_Reservation.Count > 1)
+                        // Hands are full (or worker missing): keep floor item intact and resync client hands + floor item
+                        SendTileObjectSpawn(target);
+                        if (clientWorker != null)
                         {
-                            target.m_Info.RemoveReservationOne();
+                            SendClientHandSync(clientWorker);
                         }
-                        else
-                        {
-                            target.ObjectDelete();
-                        }
+                        return;
                     }
 
                     if (target.gameObject != null && target.gameObject.activeInHierarchy &&
@@ -382,11 +410,13 @@ namespace RatopiaCoop.Sync
                         SendTileObjectDestroy(target);
                     }
                 }
-                else if (clientWorker != null && clientWorker.List_Gathering.Count < clientWorker.Get_HandCapacity())
+                else
                 {
-                    // Fallback: ground item already despawned or picked, ensure client worker has carried item on Host
-                    TileSt_Info item = new TileSt_Info(type, TObjState.Basic, 1);
-                    clientWorker.List_Gathering.Add(item);
+                    // Floor item no longer exists on Host: reject phantom pickup and reconcile client hands
+                    if (clientWorker != null)
+                    {
+                        SendClientHandSync(clientWorker);
+                    }
                 }
             }
             catch (Exception ex)
@@ -425,11 +455,9 @@ namespace RatopiaCoop.Sync
                 {
                     clientWorker.Drop_GatheringList(); // ObjectInit postfix broadcasts TileObjectSpawn
                 }
-                else if (GameMgr.Instance?._PoolMgr?.Pool_TileObject != null)
+                else if (clientWorker != null)
                 {
-                    if (clientWorker != null) clientWorker.List_Gathering?.Clear();
-                    TileObject to = GameMgr.Instance._PoolMgr.Pool_TileObject.GetNextObj(_act: false).GetComponent<TileObject>();
-                    to.ObjectInit(type, TObjState.Basic, new Vector3(posX, posY, 0f), count, _fadeskip: false);
+                    SendClientHandSync(clientWorker);
                 }
             }
             catch (Exception ex)
@@ -528,13 +556,15 @@ namespace RatopiaCoop.Sync
                     if (local != null)
                     {
                         local.m_ID = id;
+                        EnsureActiveGroundItemVisuals(local, posX, posY);
                         if (qty > 0) SetTileObjectCount(local, qty);
                     }
                     else if (GameMgr.Instance?._PoolMgr?.Pool_TileObject != null && qty > 0)
                     {
-                        TileObject to = GameMgr.Instance._PoolMgr.Pool_TileObject.GetNextObj(_act: false).GetComponent<TileObject>();
+                        TileObject to = GameMgr.Instance._PoolMgr.Pool_TileObject.GetNextObj().GetComponent<TileObject>();
                         to.ObjectInit(type, TObjState.Basic, new Vector3(posX, posY, 0f), qty, _fadeskip: true);
                         to.m_ID = id;
+                        ApplyExactSyncedTransform(to, posX, posY);
                     }
                 }
 
@@ -544,8 +574,10 @@ namespace RatopiaCoop.Sync
                     for (int i = localList.Count - 1; i >= 0; i--)
                     {
                         var to = localList[i];
-                        if (to != null && to.gameObject != null && to.gameObject.activeInHierarchy && !_clientBatchIds.Contains(to.m_ID))
+                        if (to != null && to.gameObject != null && !_clientBatchIds.Contains(to.m_ID))
                         {
+                            if (to.m_Info != null && (to.m_Info.m_Type == TileType.A_Citizen || to.m_Info.m_Type == TileType.GBot))
+                                continue;
                             to.ObjectDelete();
                         }
                     }
@@ -561,32 +593,75 @@ namespace RatopiaCoop.Sync
             }
         }
 
+        private static void ApplyExactSyncedTransform(TileObject to, float posX, float posY)
+        {
+            if (to == null) return;
+            to.SetPosition(new Vector2(posX, posY));
+            if (to.Tf != null) to.Tf.localScale = Vector3.one;
+            if (to.m_Spr != null) to.m_Spr.color = Color.white;
+            if (to.m_Cir2d != null) to.m_Cir2d.enabled = true;
+            to.MakeEnableList();
+            if (to.gameObject != null && !to.gameObject.activeSelf) to.gameObject.SetActive(true);
+        }
+
+        private static void EnsureActiveGroundItemVisuals(TileObject to, float posX, float posY)
+        {
+            if (to == null) return;
+            if (to.gameObject != null && !to.gameObject.activeSelf)
+            {
+                to.gameObject.SetActive(true);
+            }
+            if (to.Tf != null)
+            {
+                to.Tf.localScale = Vector3.one;
+                if ((to.Tf.position - new Vector3(posX, posY, to.Tf.position.z)).sqrMagnitude > 0.25f)
+                {
+                    to.SetPosition(new Vector2(posX, posY));
+                    to.MakeEnableList();
+                }
+            }
+            if (to.m_Spr != null) to.m_Spr.color = Color.white;
+            if (to.m_Cir2d != null && !to.m_Cir2d.enabled) to.m_Cir2d.enabled = true;
+        }
+
         private TileObject? FindGroundItem(int id, float x, float y, TileType type)
         {
             if (GameMgr.Instance?._PoolMgr?.List_TileObject == null) return null;
             var list = GameMgr.Instance._PoolMgr.List_TileObject;
 
-            // 1. Exact ID match
+            // 1. Exact ID + TileType match (prevents cross-type matches if local m_IndexMaker collided)
             for (int i = 0; i < list.Count; i++)
             {
                 var to = list[i];
-                if (to != null && to.m_ID == id) return to;
+                if (to != null && to.m_ID == id && to.m_Info != null && to.m_Info.m_Type == type)
+                {
+                    return to;
+                }
             }
 
-            // 2. Proximity and TileType fallback match
+            // 2. Closest Proximity and TileType fallback match
+            TileObject? best = null;
+            float bestDistSq = float.MaxValue;
             for (int i = 0; i < list.Count; i++)
             {
                 var to = list[i];
                 if (to != null && to.m_Info != null && to.m_Info.m_Type == type && to.Tf != null)
                 {
-                    if (Mathf.Abs(to.Tf.position.x - x) <= 1.0f && Mathf.Abs(to.Tf.position.y - y) <= 1.0f)
+                    float dx = to.Tf.position.x - x;
+                    float dy = to.Tf.position.y - y;
+                    if (Mathf.Abs(dx) <= 1.25f && Mathf.Abs(dy) <= 1.25f)
                     {
-                        return to;
+                        float dSq = dx * dx + dy * dy;
+                        if (dSq < bestDistSq)
+                        {
+                            bestDistSq = dSq;
+                            best = to;
+                        }
                     }
                 }
             }
 
-            return null;
+            return best;
         }
 
         // =========================================================================
@@ -778,21 +853,140 @@ namespace RatopiaCoop.Sync
             try
             {
                 Building? building = GameMgr.Instance?._BuildingMgr?.List_Building?.Find(b => b != null && b.m_ID == buildingId);
-                if (building != null)
+                if (building != null && count > 0)
                 {
                     var clientWorker = QueenSyncManager.Instance?.Player2Worker;
-                    building.AddValue(type, TObjState.Purchase, -count);
-                    if (clientWorker != null && clientWorker.List_Gathering.Count < clientWorker.Get_HandCapacity())
+                    int available = building.GetNum(type);
+                    int freeSlots = clientWorker != null ? Mathf.Max(0, clientWorker.Get_HandCapacity() - clientWorker.List_Gathering.Count) : 0;
+                    int actual = Mathf.Min(count, Mathf.Min(available, freeSlots));
+
+                    if (actual > 0 && clientWorker != null)
                     {
-                        TileSt_Info item = new TileSt_Info(type, TObjState.Basic, count);
-                        clientWorker.List_Gathering.Add(item);
+                        bool wasEmpty = clientWorker.List_Gathering.Count == 0;
+                        building.AddValue(type, TObjState.Purchase, -actual);
+                        for (int i = 0; i < actual; i++)
+                        {
+                            clientWorker.List_Gathering.Add(new TileSt_Info(type, TObjState.Basic, 1));
+                        }
+                        if (wasEmpty)
+                        {
+                            var spr = Func.Instance?.LoadSprite($"{type}Object");
+                            if (spr != null) clientWorker.StickImgSet(spr, true);
+                            clientWorker.SetCharState(CharState.Carrying);
+                        }
                     }
+
                     SendBuildingInventory(building);
+                    if (actual < count && clientWorker != null)
+                    {
+                        SendClientHandSync(clientWorker);
+                    }
                 }
             }
             catch (Exception ex)
             {
                 Plugin.Log.LogWarning($"[ItemSyncManager] HandleRequestStorageWithdraw error: {ex.Message}");
+            }
+        }
+
+        public void SendClientHandSync(T_Queen clientWorker)
+        {
+            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsHost) return;
+            if (clientWorker == null || clientWorker.List_Gathering == null) return;
+
+            NetDataWriter writer = new NetDataWriter();
+            writer.Put(clientWorker.m_GatherUnitIndex);
+            byte count = (byte)Mathf.Min(clientWorker.List_Gathering.Count, 255);
+            writer.Put(count);
+            for (int i = 0; i < count; i++)
+            {
+                var entry = clientWorker.List_Gathering[i];
+                if (entry != null)
+                {
+                    writer.Put((short)entry.m_Type);
+                    writer.Put((byte)entry.m_State);
+                    writer.Put((short)(entry.List_Reservation != null ? entry.List_Reservation.Count : 1));
+                }
+                else
+                {
+                    writer.Put((short)0);
+                    writer.Put((byte)0);
+                    writer.Put((short)0);
+                }
+            }
+
+            CoopNetManager.Instance.SendPacket(PacketType.ClientHandSync, writer, DeliveryMethod.ReliableOrdered);
+        }
+
+        private void HandleClientHandSync(NetDataReader reader)
+        {
+            if (CoopNetManager.Instance.IsHost) return;
+            if (SaveTransferManager.IsWorldLoading) return;
+            if (reader.AvailableBytes < 5) return;
+
+            int gatherUnitIndex = reader.GetInt();
+            byte count = reader.GetByte();
+
+            try
+            {
+                var localChar = QueenSyncManager.Instance?.LocalCharacter;
+                if (localChar == null || localChar.List_Gathering == null) return;
+
+                // Preserve active Citizen/GBot rescue carry if locally mid-carry
+                if (localChar.m_GatherUnitIndex != 0 && localChar.List_Gathering.Count > 0 &&
+                    (localChar.List_Gathering[0].m_Type == TileType.A_Citizen || localChar.List_Gathering[0].m_Type == TileType.GBot))
+                {
+                    return;
+                }
+
+                localChar.m_GatherUnitIndex = gatherUnitIndex;
+                localChar.List_Gathering.Clear();
+
+                for (int i = 0; i < count; i++)
+                {
+                    if (reader.AvailableBytes < 5) break;
+                    TileType type = (TileType)reader.GetShort();
+                    TObjState state = (TObjState)reader.GetByte();
+                    short resCount = reader.GetShort();
+                    if (type != TileType.None && type != TileType.Default)
+                    {
+                        localChar.List_Gathering.Add(new TileSt_Info(type, state, resCount > 0 ? resCount : 1));
+                    }
+                }
+
+                if (localChar.List_Gathering.Count > 0)
+                {
+                    var first = localChar.List_Gathering[0];
+                    var spr = Func.Instance?.LoadSprite($"{first.m_Type}Object");
+                    if (spr != null) localChar.StickImgSet(spr, true);
+                    localChar.SetCharState(CharState.Carrying);
+                }
+                else
+                {
+                    localChar.StickImgSet(null, false);
+                    if (localChar.m_CharState == CharState.Carrying)
+                    {
+                        localChar.SetCharState(CharState.None);
+                        localChar.SetAniState(AniState.Idle, _loop: true, _now: false);
+                    }
+                }
+
+                try { localChar.GatherNumEffect(); } catch { }
+                try { localChar.m_CheckBox?.HotKeyUpdate(); } catch { }
+
+                try
+                {
+                    var storageUi = GameMgr.Instance?._StorageUI;
+                    if (storageUi != null && ItemPatches.IsStorageUiOpen && storageUi.enabled)
+                    {
+                        Traverse.Create(storageUi).Method("MineUpdate").GetValue();
+                    }
+                }
+                catch { }
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogWarning($"[ItemSyncManager] HandleClientHandSync error: {ex.Message}");
             }
         }
 
@@ -855,14 +1049,16 @@ namespace RatopiaCoop.Sync
 
                 try
                 {
-                    var gameMgr = GameMgr.Instance;
-                    var storageUi = gameMgr?._StorageUI;
-                    if (gameMgr != null && storageUi != null && storageUi.gameObject.activeInHierarchy && storageUi.m_Building_Storage == building)
+                    var storageUi = GameMgr.Instance?._StorageUI;
+                    if (storageUi != null && ItemPatches.IsStorageUIOpenFor(building) && storageUi.m_Mode == StorageUI.StorageMode.Interaction)
                     {
-                        storageUi.StorageUI_Open(building, storageUi.m_Mode, gameMgr._BuildMidUI);
+                        RefreshOpenStorageUiInPlace(storageUi, building);
                     }
                 }
-                catch { }
+                catch (Exception exUi)
+                {
+                    Plugin.Log.LogWarning($"[ItemSyncManager] RefreshOpenStorageUiInPlace error: {exUi.Message}");
+                }
             }
             catch (Exception ex)
             {
@@ -872,6 +1068,172 @@ namespace RatopiaCoop.Sync
             {
                 IsApplyingRemoteStorage = false;
             }
+        }
+
+        private static bool InventoryMatchesUiList(List<TileSt_Info> bldItems, List<StorageUI_MatSlot_Data> uiItems)
+        {
+            if (bldItems.Count != uiItems.Count) return false;
+            for (int i = 0; i < uiItems.Count; i++)
+            {
+                var uiInfo = uiItems[i]?.m_TileSt_Info;
+                if (uiInfo == null) return false;
+                bool matched = false;
+                for (int j = 0; j < bldItems.Count; j++)
+                {
+                    var b = bldItems[j];
+                    if (b != null && b.m_Type == uiInfo.m_Type &&
+                        b.List_Reservation.Count == uiInfo.List_Reservation.Count &&
+                        b.m_State == uiInfo.m_State)
+                    {
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched) return false;
+            }
+            return true;
+        }
+
+        private static void RefreshOpenStorageUiInPlace(StorageUI storageUi, Building building)
+        {
+            var trav = Traverse.Create(storageUi);
+            var listMatSlotData = trav.Field<List<StorageUI_MatSlot_Data>>("List_MatSlotData").Value;
+            var gpmScroll = trav.Field<InfiniteScroll>("m_Gpm_Scorll").Value;
+            if (listMatSlotData == null || gpmScroll == null || building.List_TileObj == null) return;
+
+            // Fast path: if inventory counts/types already match (periodic 2.5s sync or Client's optimistic update),
+            // just rebind TileSt_Info references without rebuilding the scroll list, jumping scroll, or switching tabs!
+            if (InventoryMatchesUiList(building.List_TileObj, listMatSlotData))
+            {
+                for (int i = 0; i < listMatSlotData.Count; i++)
+                {
+                    var t = listMatSlotData[i].m_TileSt_Info.m_Type;
+                    var replacement = building.List_TileObj.Find(x => x != null && x.m_Type == t);
+                    if (replacement != null)
+                    {
+                        listMatSlotData[i].m_TileSt_Info = replacement;
+                    }
+                }
+                if (gpmScroll.items != null)
+                {
+                    for (int i = 0; i < gpmScroll.items.Count; i++)
+                    {
+                        if (gpmScroll.items[i] is StorageUI_MatSlot matSlot && matSlot.m_TileSt_Info != null)
+                        {
+                            var replacement = building.List_TileObj.Find(x => x != null && x.m_Type == matSlot.m_TileSt_Info.m_Type);
+                            if (replacement != null) matSlot.m_TileSt_Info = replacement;
+                        }
+                    }
+                }
+                trav.Method("MineUpdate").GetValue();
+                return;
+            }
+
+            // Contents actually changed (e.g. Host or citizen withdrew/deposited while StorageUI is open):
+            // rebuild list cleanly in-place while preserving active tab (Mine vs Storage), scroll, and selection!
+            var savedState = storageUi.m_State;
+            var scrollBar = trav.Field<Scrollbar>("m_ScrollBar").Value;
+            float savedScroll = scrollBar != null ? scrollBar.value : 1f;
+            var selectSlot = trav.Field<StorageUI_Slot?>("m_SelectSlot").Value as StorageUI_MatSlot;
+            TileType? savedSelectedType = selectSlot != null && selectSlot.m_TileSt_Info != null
+                ? selectSlot.m_TileSt_Info.m_Type
+                : (TileType?)null;
+            int savedSelectIndex = trav.Field<int>("m_SelectIndex").Value;
+            int sortIndex = trav.Field<int>("m_SortIndex").Value;
+
+            var rebuilt = new List<StorageUI_MatSlot_Data>(building.List_TileObj.Count);
+            for (int i = 0; i < building.List_TileObj.Count; i++)
+            {
+                var info = building.List_TileObj[i];
+                if (info == null) continue;
+                var data = new StorageUI_MatSlot_Data
+                {
+                    m_Index = i,
+                    m_Mode = storageUi.m_Mode,
+                    m_TileSt_Info = info
+                };
+                rebuilt.Add(data);
+            }
+
+            var dbMgr = GameMgr.Instance?._DB_Mgr;
+            if (sortIndex == 0 && dbMgr != null)
+            {
+                rebuilt.Sort((a, b) => string.Compare(
+                    dbMgr.GetTileInfo(a.m_TileSt_Info.m_Type)?.T_Name ?? string.Empty,
+                    dbMgr.GetTileInfo(b.m_TileSt_Info.m_Type)?.T_Name ?? string.Empty,
+                    StringComparison.Ordinal));
+            }
+            else if (sortIndex == 1)
+            {
+                rebuilt.Sort((a, b) => b.m_TileSt_Info.List_Reservation.Count.CompareTo(a.m_TileSt_Info.List_Reservation.Count));
+            }
+            else if (sortIndex == 2 && dbMgr != null)
+            {
+                rebuilt.Sort((a, b) => (dbMgr.GetTileInfo(b.m_TileSt_Info.m_Type)?.Price ?? 0).CompareTo(
+                    dbMgr.GetTileInfo(a.m_TileSt_Info.m_Type)?.Price ?? 0));
+            }
+            else if (sortIndex == 3 && dbMgr != null)
+            {
+                rebuilt.Sort((a, b) => (dbMgr.GetTileInfo(b.m_TileSt_Info.m_Type)?.Category ?? 0).CompareTo(
+                    dbMgr.GetTileInfo(a.m_TileSt_Info.m_Type)?.Category ?? 0));
+            }
+
+            listMatSlotData.Clear();
+            gpmScroll.Clear();
+
+            for (int i = 0; i < rebuilt.Count; i++)
+            {
+                rebuilt[i].m_Index = i;
+                listMatSlotData.Add(rebuilt[i]);
+                gpmScroll.InsertData(rebuilt[i]);
+            }
+
+            if (listMatSlotData.Count == 0)
+            {
+                trav.Field<int>("m_SelectIndex").Value = 0;
+                trav.Field<StorageUI_Slot?>("m_SelectSlot").Value = null;
+                gpmScroll.UpdateAllData();
+                if (savedState == StorageUI.StorageUI_State.Storage && GameMgr.Instance?._BatchUI?.m_ResToolTip != null)
+                {
+                    GameMgr.Instance._BatchUI.m_ResToolTip.gameObject.SetActive(false);
+                }
+            }
+            else if (savedState == StorageUI.StorageUI_State.Storage)
+            {
+                int newIndex = -1;
+                if (savedSelectedType.HasValue)
+                {
+                    newIndex = listMatSlotData.FindIndex(x => x.m_TileSt_Info.m_Type == savedSelectedType.Value);
+                }
+                if (newIndex < 0)
+                {
+                    newIndex = Mathf.Clamp(savedSelectIndex, 0, listMatSlotData.Count - 1);
+                }
+                trav.Field<bool>("m_OpenSfxCheck").Value = true;
+                storageUi.Selected(newIndex, _move: false);
+            }
+            else
+            {
+                trav.Field<int>("m_SelectIndex").Value = Mathf.Clamp(savedSelectIndex, 0, listMatSlotData.Count - 1);
+                trav.Field<StorageUI_Slot?>("m_SelectSlot").Value = null;
+                gpmScroll.UpdateAllData();
+                if (gpmScroll.items != null)
+                {
+                    for (int i = 0; i < gpmScroll.items.Count; i++)
+                    {
+                        if (gpmScroll.items[i] is StorageUI_Slot slotItem)
+                        {
+                            slotItem.Selected(_act: false);
+                        }
+                    }
+                }
+            }
+
+            if (scrollBar != null)
+            {
+                scrollBar.value = savedScroll;
+            }
+            trav.Method("MineUpdate").GetValue();
         }
     }
 }

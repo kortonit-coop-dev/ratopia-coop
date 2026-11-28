@@ -14,7 +14,7 @@ namespace RatopiaCoop
     {
         public const string PLUGIN_GUID = "com.ratopia.coop";
         public const string PLUGIN_NAME = "Ratopia LAN Co-op Mod";
-        public const string PLUGIN_VERSION = "1.0.0";
+        public const string PLUGIN_VERSION = "1.0.5";
 
         public static Plugin Instance { get; private set; } = null!;
         public static BepInEx.Logging.ManualLogSource Log => Instance.Logger;

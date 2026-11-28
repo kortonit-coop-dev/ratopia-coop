@@ -338,5 +338,59 @@ namespace RatopiaUnitBrain.Puppeteer.Patches
             }
             return true;
         }
+
+        // =====================================================================
+        // 6. Suppress Spine AnimationEvent side-effects on RemotePuppets
+        //    (e.g. SPE_MiningCheck -> WorkTimeGauge.TileUpdate_Call, attacks)
+        // =====================================================================
+
+        private static bool IsGaugeMasterPuppet(WorkTimeGauge? gauge)
+        {
+            if (gauge == null) return false;
+            var master = Traverse.Create(gauge).Field<GameUnit>("m_Master").Value ?? gauge.GetComponentInParent<GameUnit>();
+            return master != null && IsPuppet(master);
+        }
+
+        [HarmonyPatch(typeof(WorkTimeGauge), nameof(WorkTimeGauge.TileUpdate_Call))]
+        [HarmonyPrefix]
+        public static bool WorkTimeGauge_TileUpdate_Call_Prefix(WorkTimeGauge __instance)
+        {
+            return !IsGaugeMasterPuppet(__instance);
+        }
+
+        [HarmonyPatch(typeof(WorkTimeGauge), nameof(WorkTimeGauge.LoggingUpdate_Call))]
+        [HarmonyPrefix]
+        public static bool WorkTimeGauge_LoggingUpdate_Call_Prefix(WorkTimeGauge __instance)
+        {
+            return !IsGaugeMasterPuppet(__instance);
+        }
+
+        [HarmonyPatch(typeof(WorkTimeGauge), nameof(WorkTimeGauge.TileDemolition_Call))]
+        [HarmonyPrefix]
+        public static bool WorkTimeGauge_TileDemolition_Call_Prefix(WorkTimeGauge __instance)
+        {
+            return !IsGaugeMasterPuppet(__instance);
+        }
+
+        [HarmonyPatch(typeof(WorkTimeGauge), nameof(WorkTimeGauge.TileRepair_Call))]
+        [HarmonyPrefix]
+        public static bool WorkTimeGauge_TileRepair_Call_Prefix(WorkTimeGauge __instance)
+        {
+            return !IsGaugeMasterPuppet(__instance);
+        }
+
+        [HarmonyPatch(typeof(GameUnit), nameof(GameUnit.SwdAtk_Call))]
+        [HarmonyPrefix]
+        public static bool GameUnit_SwdAtk_Call_Prefix(GameUnit __instance)
+        {
+            return !IsPuppet(__instance);
+        }
+
+        [HarmonyPatch(typeof(GameUnit), nameof(GameUnit.BowAtk_Call))]
+        [HarmonyPrefix]
+        public static bool GameUnit_BowAtk_Call_Prefix(GameUnit __instance)
+        {
+            return !IsPuppet(__instance);
+        }
     }
 }

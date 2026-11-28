@@ -15,6 +15,9 @@ namespace RatopiaUnitBrain.Data
         public int CarriedCount;
         public bool InBuilding;
         public bool FacingRight;
+        public bool IsTileTarget;
+        public Vector2 WorkTargetPos;
+        public float WorkProgress;
 
         public static UnitActionCommand Stop(AniState idleState = AniState.Idle)
         {

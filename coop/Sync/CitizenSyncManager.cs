@@ -200,45 +200,18 @@ namespace RatopiaCoop.Sync
             CoopNetManager.Instance.SendPacket(PacketType.UnitPathCommit, writer, DeliveryMethod.ReliableOrdered);
         }
 
-        private void OnHostTaskStarted(GameUnit unit, TaskDescriptor task)
-        {
-            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsHost) return;
-            if (unit == null || unit is T_Queen || task == null) return;
-
-            NetworkUnitId unitId = NetworkUnitId.FromUnit(unit);
-            NetDataWriter writer = new NetDataWriter();
-            writer.Put((byte)unitId.Kind);
-            writer.Put(unitId.Id);
-            writer.Put((byte)task.TaskType);
-            writer.Put((short)unit.m_AniState);
-
-            string animName = string.Empty;
-            if (unit.m_Spine != null && unit.m_Spine.AnimationState != null)
-            {
-                var track = unit.m_Spine.AnimationState.GetCurrent(0);
-                if (track != null && track.Animation != null)
-                    animName = track.Animation.Name ?? string.Empty;
-            }
-            writer.Put(animName);
-
-            Vector3 pos = unit.Tf != null ? unit.Tf.position : unit.transform.position;
-            writer.Put(pos.x);
-            writer.Put(pos.y);
-            writer.Put(task.Duration);
-            writer.Put((short)task.ItemType);
-
-            bool facingRight = unit.m_Spine != null && unit.m_Spine.skeleton != null && unit.m_Spine.skeleton.ScaleX > 0;
-            writer.Put(facingRight);
-            bool inBuilding = unit.Tf != null && unit.Tf.position.z >= 0.35f;
-            writer.Put(inBuilding);
-
-            short enemyType = (short)(unit is GameEnemy e ? e.m_E_Name : 0);
-            writer.Put(enemyType);
-
-            CoopNetManager.Instance.SendPacket(PacketType.UnitAction, writer, DeliveryMethod.ReliableOrdered);
-        }
-
-        private void OnHostWorkGaugeUpdated(GameUnit unit, bool active, float progress, float duration)
+        private void SendUnitAction(
+            GameUnit unit,
+            UnitTaskType taskType,
+            AniState aniState,
+            string animName,
+            float duration,
+            TileType carriedItem,
+            bool showWorkGauge,
+            bool isTileTarget = false,
+            Vector2 workTargetPos = default,
+            float workProgress = 0f,
+            bool inBuilding = false)
         {
             if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsHost) return;
             if (unit == null || unit is T_Queen) return;
@@ -247,71 +220,117 @@ namespace RatopiaCoop.Sync
             NetDataWriter writer = new NetDataWriter();
             writer.Put((byte)unitId.Kind);
             writer.Put(unitId.Id);
-            writer.Put((byte)(active ? UnitTaskType.Crafting : UnitTaskType.Idle));
-            writer.Put((short)unit.m_AniState);
-
-            string animName = string.Empty;
-            if (unit.m_Spine != null && unit.m_Spine.AnimationState != null)
-            {
-                var track = unit.m_Spine.AnimationState.GetCurrent(0);
-                if (track != null && track.Animation != null)
-                    animName = track.Animation.Name ?? string.Empty;
-            }
-            writer.Put(animName);
+            writer.Put((byte)taskType);
+            writer.Put((short)aniState);
+            writer.Put(animName ?? string.Empty);
 
             Vector3 pos = unit.Tf != null ? unit.Tf.position : unit.transform.position;
             writer.Put(pos.x);
             writer.Put(pos.y);
             writer.Put(duration);
-            writer.Put((short)TileType.None);
-
-            bool facingRight = unit.m_Spine != null && unit.m_Spine.skeleton != null && unit.m_Spine.skeleton.ScaleX > 0;
-            writer.Put(facingRight);
-            bool inBuilding = unit.Tf != null && unit.Tf.position.z >= 0.35f;
-            writer.Put(inBuilding);
-
-            short enemyType = (short)(unit is GameEnemy e ? e.m_E_Name : 0);
-            writer.Put(enemyType);
-
-            CoopNetManager.Instance.SendPacket(PacketType.UnitAction, writer, DeliveryMethod.ReliableOrdered);
-        }
-
-        private void OnHostBackpackChanged(GameUnit unit, TileType carriedItem, int count)
-        {
-            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsHost) return;
-            if (unit == null || unit is T_Queen) return;
-
-            NetworkUnitId unitId = NetworkUnitId.FromUnit(unit);
-            NetDataWriter writer = new NetDataWriter();
-            writer.Put((byte)unitId.Kind);
-            writer.Put(unitId.Id);
-            writer.Put((byte)UnitTaskType.Gathering);
-            writer.Put((short)unit.m_AniState);
-
-            string animName = string.Empty;
-            if (unit.m_Spine != null && unit.m_Spine.AnimationState != null)
-            {
-                var track = unit.m_Spine.AnimationState.GetCurrent(0);
-                if (track != null && track.Animation != null)
-                    animName = track.Animation.Name ?? string.Empty;
-            }
-            writer.Put(animName);
-
-            Vector3 pos = unit.Tf != null ? unit.Tf.position : unit.transform.position;
-            writer.Put(pos.x);
-            writer.Put(pos.y);
-            writer.Put(0f);
             writer.Put((short)carriedItem);
 
             bool facingRight = unit.m_Spine != null && unit.m_Spine.skeleton != null && unit.m_Spine.skeleton.ScaleX > 0;
             writer.Put(facingRight);
-            bool inBuilding = unit.Tf != null && unit.Tf.position.z >= 0.35f;
             writer.Put(inBuilding);
 
             short enemyType = (short)(unit is GameEnemy e ? e.m_E_Name : 0);
             writer.Put(enemyType);
 
+            writer.Put(showWorkGauge);
+            writer.Put(isTileTarget);
+            writer.Put(workTargetPos.x);
+            writer.Put(workTargetPos.y);
+            writer.Put(workProgress);
+
             CoopNetManager.Instance.SendPacket(PacketType.UnitAction, writer, DeliveryMethod.ReliableOrdered);
+        }
+
+        private static string GetCurrentSpineAnimName(GameUnit unit)
+        {
+            if (unit?.m_Spine?.AnimationState != null)
+            {
+                var track = unit.m_Spine.AnimationState.GetCurrent(0);
+                if (track?.Animation != null)
+                {
+                    return track.Animation.Name ?? string.Empty;
+                }
+            }
+            return string.Empty;
+        }
+
+        private void OnHostTaskStarted(GameUnit unit, TaskDescriptor task)
+        {
+            if (unit == null || task == null) return;
+            bool inBuilding = unit.Tf != null && unit.Tf.position.z >= 0.35f;
+            bool showGauge = task.IsTileTarget || task.TaskType == UnitTaskType.Crafting || task.Duration > 0f || task.InitialProgress > 0f;
+            SendUnitAction(
+                unit,
+                task.TaskType,
+                unit.m_AniState,
+                GetCurrentSpineAnimName(unit),
+                task.Duration,
+                task.ItemType,
+                showWorkGauge: showGauge,
+                isTileTarget: task.IsTileTarget,
+                workTargetPos: task.TargetPos,
+                workProgress: task.InitialProgress,
+                inBuilding: inBuilding);
+        }
+
+        private void OnHostWorkGaugeUpdated(GameUnit unit, bool active, float progress, float duration)
+        {
+            if (unit == null) return;
+            bool inBuilding = unit.Tf != null && unit.Tf.position.z >= 0.35f;
+
+            bool isTileTarget = false;
+            Vector2 workTargetPos = Vector2.zero;
+            if (active && unit.m_WorkTimeGauge != null && unit.m_WorkTimeGauge.transform != null)
+            {
+                var p = unit.m_WorkTimeGauge.transform.parent;
+                if (p != null && p != unit.Tf)
+                {
+                    var tile = p.GetComponent<C_Tile>();
+                    if (tile != null)
+                    {
+                        isTileTarget = true;
+                        workTargetPos = tile.GetPos();
+                    }
+                }
+                if (progress <= 0f && unit.m_WorkTimeGauge.m_Gauge != null)
+                {
+                    progress = unit.m_WorkTimeGauge.m_Gauge.size.x;
+                }
+            }
+
+            SendUnitAction(
+                unit,
+                active ? (isTileTarget ? UnitTaskType.Mining : UnitTaskType.Crafting) : UnitTaskType.Idle,
+                unit.m_AniState,
+                GetCurrentSpineAnimName(unit),
+                duration,
+                TileType.None,
+                showWorkGauge: active,
+                isTileTarget: isTileTarget,
+                workTargetPos: workTargetPos,
+                workProgress: progress,
+                inBuilding: inBuilding);
+        }
+
+        private void OnHostBackpackChanged(GameUnit unit, TileType carriedItem, int count)
+        {
+            if (unit == null) return;
+            bool inBuilding = unit.Tf != null && unit.Tf.position.z >= 0.35f;
+            bool isWorking = unit.m_WorkTimeGauge != null && unit.m_WorkTimeGauge.IsGaugeAcitve();
+            SendUnitAction(
+                unit,
+                UnitTaskType.Gathering,
+                unit.m_AniState,
+                GetCurrentSpineAnimName(unit),
+                0f,
+                carriedItem,
+                showWorkGauge: isWorking,
+                inBuilding: inBuilding);
         }
 
         private void OnHostSpeechBubble(GameUnit unit, SpBubbleState bubble, int level)
@@ -331,34 +350,15 @@ namespace RatopiaCoop.Sync
 
         private void OnHostAttackAction(GameUnit unit, bool isBow)
         {
-            if (CoopNetManager.Instance == null || !CoopNetManager.Instance.IsConnected || !CoopNetManager.Instance.IsHost) return;
-            if (unit == null || unit is T_Queen) return;
-
-            NetworkUnitId unitId = NetworkUnitId.FromUnit(unit);
-            NetDataWriter writer = new NetDataWriter();
-            writer.Put((byte)unitId.Kind);
-            writer.Put(unitId.Id);
-            writer.Put((byte)UnitTaskType.Attacking);
-            writer.Put((short)(isBow ? AniState.Atk_BowMid : AniState.Attack_Sword_1));
-
-            string animName = isBow ? "Attack_Bow" : "AttackCombo_Sword1";
-            writer.Put(animName);
-
-            Vector3 pos = unit.Tf != null ? unit.Tf.position : unit.transform.position;
-            writer.Put(pos.x);
-            writer.Put(pos.y);
-            writer.Put(0f);
-            writer.Put((short)TileType.None);
-
-            bool facingRight = unit.m_Spine != null && unit.m_Spine.skeleton != null && unit.m_Spine.skeleton.ScaleX > 0;
-            writer.Put(facingRight);
-            bool inBuilding = false;
-            writer.Put(inBuilding);
-
-            short enemyType = (short)(unit is GameEnemy e ? e.m_E_Name : 0);
-            writer.Put(enemyType);
-
-            CoopNetManager.Instance.SendPacket(PacketType.UnitAction, writer, DeliveryMethod.ReliableOrdered);
+            if (unit == null) return;
+            SendUnitAction(
+                unit,
+                UnitTaskType.Attacking,
+                isBow ? AniState.Atk_BowMid : AniState.Attack_Sword_1,
+                isBow ? "Attack_Bow" : "AttackCombo_Sword1",
+                0f,
+                TileType.None,
+                showWorkGauge: false);
         }
 
         // =========================================================================
@@ -422,6 +422,23 @@ namespace RatopiaCoop.Sync
                     writer.Put(isWorking);
                     float workProgress = (isWorking && u.m_WorkTimeGauge != null && u.m_WorkTimeGauge.m_Gauge != null) ? u.m_WorkTimeGauge.m_Gauge.size.x : 0f;
                     writer.Put(workProgress);
+
+                    C_Tile? workingTile = null;
+                    if (isWorking && u.m_WorkTimeGauge != null && u.m_WorkTimeGauge.transform != null)
+                    {
+                        var gaugeParent = u.m_WorkTimeGauge.transform.parent;
+                        if (gaugeParent != null && gaugeParent != u.Tf)
+                        {
+                            workingTile = gaugeParent.GetComponent<C_Tile>();
+                        }
+                    }
+                    bool isTileWork = workingTile != null;
+                    writer.Put(isTileWork);
+                    if (isTileWork && workingTile != null)
+                    {
+                        writer.Put((float)workingTile.m_X);
+                        writer.Put((float)workingTile.m_Y);
+                    }
 
                     bool inBuilding = u.Tf != null && u.Tf.position.z >= 0.35f;
                     writer.Put(inBuilding);
@@ -565,6 +582,10 @@ namespace RatopiaCoop.Sync
             bool facingRight = reader.GetBool();
             bool inBuilding = reader.GetBool();
             EnemyType enemyType = reader.AvailableBytes >= 2 ? (EnemyType)reader.GetShort() : (EnemyType)0;
+            bool showWorkGauge = reader.AvailableBytes >= 1 ? reader.GetBool() : (taskType == UnitTaskType.Crafting || duration > 0);
+            bool isTileTarget = reader.AvailableBytes >= 1 && reader.GetBool();
+            Vector2 workTargetPos = reader.AvailableBytes >= 8 ? new Vector2(reader.GetFloat(), reader.GetFloat()) : Vector2.zero;
+            float workProgress = reader.AvailableBytes >= 4 ? reader.GetFloat() : 0f;
 
             NetworkUnitId unitId = new NetworkUnitId(kind, id);
             GameUnit unit = GetOrSpawnPuppetUnit(unitId, targetPos, enemyType);
@@ -577,12 +598,15 @@ namespace RatopiaCoop.Sync
                     AnimationName = animName,
                     Loop = taskType != UnitTaskType.Attacking,
                     TargetPos = targetPos,
-                    ShowWorkGauge = taskType == UnitTaskType.Crafting || duration > 0,
+                    ShowWorkGauge = showWorkGauge,
                     WorkGaugeDuration = duration,
                     CarriedItem = carriedItem,
                     CarriedCount = carriedItem != TileType.None ? 1 : 0,
                     InBuilding = inBuilding,
-                    FacingRight = facingRight
+                    FacingRight = facingRight,
+                    IsTileTarget = isTileTarget,
+                    WorkTargetPos = workTargetPos,
+                    WorkProgress = workProgress
                 };
                 BrainPuppeteer.Instance.ExecuteAction(unit, cmd);
             }
@@ -635,6 +659,10 @@ namespace RatopiaCoop.Sync
                 TileType carriedItem = (TileType)reader.GetShort();
                 bool isWorking = reader.GetBool();
                 float workProgress = reader.GetFloat();
+                bool isTileTarget = reader.AvailableBytes >= 1 && reader.GetBool();
+                Vector2 workTargetPos = (isTileTarget && reader.AvailableBytes >= 8)
+                    ? new Vector2(reader.GetFloat(), reader.GetFloat())
+                    : Vector2.zero;
                 bool inBuilding = reader.GetBool();
                 EnemyType enemyType = (EnemyType)reader.GetShort();
 
@@ -660,6 +688,8 @@ namespace RatopiaCoop.Sync
                         CarriedCount = carriedItem != TileType.None ? 1 : 0,
                         IsWorking = isWorking,
                         WorkProgress = workProgress,
+                        IsTileTarget = isTileTarget,
+                        WorkTargetPos = workTargetPos,
                         IsInBuilding = inBuilding
                     };
                     BrainPuppeteer.Instance.ApplyStateSnapshot(unit, snapshot);
